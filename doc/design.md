@@ -17,14 +17,13 @@
 
 # Functionality
 
-- | Documents\*\*              |
-  |----------------------------|
-  | \- Properties              |
-  | \- author                  |
-  | \- title                   |
-  | \- list of reviewers       |
-  | \- latest version          |
-  | \- latest approved version |
+- **Documents** 
+- Properties 
+- author 
+- title 
+- list of reviewers 
+- latest version 
+- latest approved version
 
   - versions
     - snapshots
