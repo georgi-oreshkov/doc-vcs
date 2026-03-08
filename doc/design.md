@@ -3,6 +3,7 @@
 **SAAS**
 
 # Frontend functionality ==Unfinished==
+Technologies: Vite, React, HeroUI, Javascript, Single page application
 
 ## 1. Landing page
 
