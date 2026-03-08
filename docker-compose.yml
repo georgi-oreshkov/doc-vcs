@@ -18,7 +18,7 @@ services:
   pgadmin:
     image: dpage/pgadmin4
     container_name: vcs_pgadmin
-    restart: always
+    restart: unless-stopped
     environment:
       - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL}
       - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD}
@@ -33,12 +33,28 @@ services:
     networks:
       - docvcs
 
+  minio:
+    image: minio/minio
+    container_name: minio
+    environment:
+     - MINIO_ROOT_USER=admin
+     - MINIO_ROOT_PASSWORD=12345678
+     - MINIO_DEFAULT_BUCKETS=buck1
+     - MINIO_CONSOLE_ADDRESS=:9002
+    volumes:
+      - minio-data:/data
+    networks:
+      - docvcs
+    command: minio server /data
+    ports: 
+      - 9000:9000
+      - 9002:9002
+
 networks:
   docvcs:
     driver: bridge
 
 volumes:
   db-data:
-    name: db_data
   pgadmin-data:
-    name: pgadmin_data
+  minio-data:
