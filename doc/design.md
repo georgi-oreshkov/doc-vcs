@@ -2,19 +2,45 @@
 
 **SAAS**
 
-# Frontend functionality ==Unfinished==
-Technologies: Vite, React, HeroUI, Javascript, Single page application
-
+# Frontend pages
 ## 1. Landing page
+ - Login
+ - Register
+ - User guide / About
 
-- Login
-- Register
-- User guide / About
+## Navbar
+- Main (organizations) page button
+- Search page (documents page)
+- My documents page (documents page) **If the user is an author / reviewer **
+- Admin panel **If the user is an admin**
+- Profile icon
 
-## 2. Home page
+## 2. Main page
+- Create/edit organization -> pop-up form
+- Choose organization -> documents page
 
-1.  Create organization - become admin
-2.  
+## 3.Documents page
+- Search bar for documents.
+- filters (by date, by author)
+- Document view (cards)
+	- Title
+	- Author
+	- Status (**Only for author / reviewer / admin**)
+- PAGINATION
+
+## 4. Document viewer
+- Document title
+- Version selector (stylized slider)
+- Download button
+- New version button
+- Rollback to this version (If this is an old version) button
+- Change visualizer
+
+## 5. Admin panel
+- add users
+- manage user roles
+- organization config
+
 
 # Functionality
 
