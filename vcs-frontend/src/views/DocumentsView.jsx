@@ -1,21 +1,21 @@
-import { Button } from "@heroui/react";
+import { useDisclosure, Button } from "@heroui/react";
 import { Plus } from 'lucide-react';
 import DocumentCard from '../components/DocumentCard';
-import AppNavbar from "../components/AppNavbar"; // Ако го ползваш някъде
+import AppNavbar from "../components/AppNavbar"; 
 import DocumentsFilter, { useDocumentFilters } from '../components/DocumentsFilter';
+import NewDocumentModal from '../components/NewDocumentModal';
 
 export default function DocumentsView({ setView, onSelectDoc }) {
-  // 1. Твоите данни
+  const { isOpen, onOpen, onOpenChange } = useDisclosure();
+ 
   const docs = [
     { id: 1, title: "Q3 Financial Report", author: "Alice Smith", status: "Approved", version: "v2.4", date: "Mar 01, 2026", userRelation: "author" },
     { id: 2, title: "API Integrations Spec", author: "Bob Jones", status: "In Review", version: "v1.1", date: "Mar 05, 2026", userRelation: "reviewer" },
     { id: 3, title: "Database Migration Plan", author: "You", status: "Draft", version: "v0.3", date: "Mar 08, 2026", userRelation: "author" },
   ];
 
-  // 2. Взимаме логиката от Custom Hook-а
+  // Filters
   const filterProps = useDocumentFilters(docs);
-  
-  // 3. Изваждаме само филтрираните документи, за да ги нарисуваме
   const { filteredDocuments } = filterProps; 
 
   return (
@@ -25,7 +25,9 @@ export default function DocumentsView({ setView, onSelectDoc }) {
           <h1 className="text-3xl font-bold text-white mb-2">Documents</h1>
           <p className="text-zinc-400 text-sm">Search, filter, and manage your organization's versioned documents.</p>
         </div>
-        <Button color="primary" startContent={<Plus size={18} />}>New Document</Button>
+        <Button color="primary" startContent={<Plus size={18} />} onPress={onOpen}>
+          New Document
+        </Button>
       </div>
 
       {/* Подаваме всички стейтове към филтъра чрез spread оператора */}
@@ -43,6 +45,7 @@ export default function DocumentsView({ setView, onSelectDoc }) {
           <p className="text-zinc-500 col-span-2">No documents match your filters.</p>
         )}
       </div>
+      <NewDocumentModal isOpen={isOpen} onOpenChange={onOpenChange} />
     </div>
   );
 }
