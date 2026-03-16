@@ -1,5 +1,6 @@
 import { Navbar, NavbarBrand, NavbarContent, NavbarItem, Link, Button, Avatar } from "@heroui/react";
 import { GitBranch } from 'lucide-react';
+import UserDropdown from "./UserDropdown";
 
 export default function AppNavbar({ currentView, setView }) {
   return (
@@ -41,7 +42,7 @@ export default function AppNavbar({ currentView, setView }) {
           </Button>
         </NavbarItem>
         <NavbarItem>
-            <Avatar isBordered color="primary" src="https://i.pravatar.cc/150?u=a042581f4e29026024d" size="sm" />
+            <UserDropdown setView={setView} />
         </NavbarItem>
       </NavbarContent>
     </Navbar>
