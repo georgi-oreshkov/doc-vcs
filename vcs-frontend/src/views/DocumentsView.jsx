@@ -1,16 +1,22 @@
-import { useState } from 'react';
-import { Input, Button, Select, SelectItem } from "@heroui/react";
-import { Search, Plus, Filter, User } from 'lucide-react';
+import { Button } from "@heroui/react";
+import { Plus } from 'lucide-react';
 import DocumentCard from '../components/DocumentCard';
+import AppNavbar from "../components/AppNavbar"; // Ако го ползваш някъде
+import DocumentsFilter, { useDocumentFilters } from '../components/DocumentsFilter';
 
 export default function DocumentsView({ setView, onSelectDoc }) {
-  const [searchQuery, setSearchQuery] = useState('');
-
+  // 1. Твоите данни
   const docs = [
     { id: 1, title: "Q3 Financial Report", author: "Alice Smith", status: "Approved", version: "v2.4", date: "Mar 01, 2026", userRelation: "author" },
     { id: 2, title: "API Integrations Spec", author: "Bob Jones", status: "In Review", version: "v1.1", date: "Mar 05, 2026", userRelation: "reviewer" },
     { id: 3, title: "Database Migration Plan", author: "You", status: "Draft", version: "v0.3", date: "Mar 08, 2026", userRelation: "author" },
   ];
+
+  // 2. Взимаме логиката от Custom Hook-а
+  const filterProps = useDocumentFilters(docs);
+  
+  // 3. Изваждаме само филтрираните документи, за да ги нарисуваме
+  const { filteredDocuments } = filterProps; 
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 w-full z-10 flex-grow">
@@ -22,30 +28,20 @@ export default function DocumentsView({ setView, onSelectDoc }) {
         <Button color="primary" startContent={<Plus size={18} />}>New Document</Button>
       </div>
 
-      <div className="flex gap-4 mb-8 bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/80">
-        <Input 
-          className="flex-1" variant="bordered"
-          startContent={<Search size={18} className="text-zinc-500" />}
-          placeholder="Search documents by title..." 
-          value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-        />
-        <Select variant="bordered" className="max-w-xs" placeholder="Filter by Author" startContent={<User size={18} className="text-zinc-500"/>}>
-          <SelectItem key="you" value="You">You</SelectItem>
-          <SelectItem key="alice" value="Alice Smith">Alice Smith</SelectItem>
-        </Select>
-        <Select variant="bordered" className="max-w-xs" placeholder="Filter by Status" startContent={<Filter size={18} className="text-zinc-500"/>}>
-          <SelectItem key="approved" value="approved">Approved</SelectItem>
-          <SelectItem key="review" value="in review">In Review</SelectItem>
-        </Select>
-      </div>
+      {/* Подаваме всички стейтове към филтъра чрез spread оператора */}
+      <DocumentsFilter {...filterProps} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {docs.filter(d => d.title.toLowerCase().includes(searchQuery.toLowerCase())).map(doc => (
+        {filteredDocuments.map(doc => (
           <DocumentCard 
             key={doc.id} doc={doc} 
             onSelect={() => { onSelectDoc(doc); setView('viewer'); }} 
           />
         ))}
+        
+        {filteredDocuments.length === 0 && (
+          <p className="text-zinc-500 col-span-2">No documents match your filters.</p>
+        )}
       </div>
     </div>
   );
