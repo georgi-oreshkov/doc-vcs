@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Input, Select, SelectItem } from "@heroui/react";
 import { Search, Filter, User } from 'lucide-react';
 
-// 1. ТОВА Е ТВОЯТ CUSTOM HOOK - Той държи логиката
+// 1. This hook encapsulates all the filter logic and state management for documents
 export function useDocumentFilters(docs) {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedAuthor, setSelectedAuthor] = useState(new Set([]));
@@ -21,7 +21,7 @@ export function useDocumentFilters(docs) {
         });
     }, [docs, selectedAuthor, selectedStatus, searchQuery]);
 
-    // Връщаме всичко, което ще трябва на главния компонент
+    // Return all states and setters so that the component can use them
     return {
         searchQuery, setSearchQuery,
         selectedAuthor, setSelectedAuthor,
