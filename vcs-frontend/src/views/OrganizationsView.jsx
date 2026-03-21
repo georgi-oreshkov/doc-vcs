@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Input, Button, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Textarea } from "@heroui/react";
+import { Input, Button, useDisclosure } from "@heroui/react";
 import { Search, Plus } from 'lucide-react';
 import OrganizationCard from '../components/OrganizationCard';
+import OrganizationModal from '../components/OrganizationModal';
 
 export default function OrganizationsView({ setView }) {
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
@@ -16,6 +17,7 @@ export default function OrganizationsView({ setView }) {
 
   const filteredOrgs = orgs.filter(o => o.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
+  // this function will be called both for creating a new org (with null) and for editing (with the org data)
   const handleOpenModal = (org = null) => {
     setEditingOrg(org);
     onOpen();
@@ -23,6 +25,7 @@ export default function OrganizationsView({ setView }) {
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 w-full z-10 flex-grow">
+      {/* Header & Controls */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Organizations</h1>
@@ -43,29 +46,23 @@ export default function OrganizationsView({ setView }) {
         </div>
       </div>
 
+      {/* Grid with organization cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredOrgs.map(org => (
-          <OrganizationCard key={org.id} org={org} setView={setView} onOpenModal={handleOpenModal} />
+          <OrganizationCard 
+            key={org.id} 
+            org={org} 
+            setView={setView} 
+            onOpenModal={handleOpenModal} 
+          />
         ))}
       </div>
 
-      <Modal isOpen={isOpen} onOpenChange={onOpenChange} className="bg-zinc-950 border border-zinc-800 text-white">
-        <ModalContent>
-          {(onClose) => (
-            <>
-              <ModalHeader className="flex flex-col gap-1">{editingOrg ? "Organization Settings" : "Create New Organization"}</ModalHeader>
-              <ModalBody>
-                <Input label="Organization Name" placeholder="e.g. OpenSource Labs" defaultValue={editingOrg?.name || ''} variant="bordered" />
-                <Textarea label="Description" placeholder="Brief description..." variant="bordered" />
-              </ModalBody>
-              <ModalFooter>
-                <Button color="danger" variant="light" onPress={onClose}>Cancel</Button>
-                <Button color="primary" onPress={onClose}>{editingOrg ? "Save Changes" : "Create"}</Button>
-              </ModalFooter>
-            </>
-          )}
-        </ModalContent>
-      </Modal>
+      <OrganizationModal 
+        isOpen={isOpen} 
+        onOpenChange={onOpenChange} 
+        editingOrg={editingOrg} 
+      />
     </div>
   );
 }

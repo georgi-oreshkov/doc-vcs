@@ -1,26 +1,39 @@
 #!/bin/bash
 set -e
 
-# This runs inside the database defined by $POSTGRES_DB
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
-    -- 1. Create the App User
+#ADMINISTRATIVE TASKS
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "postgres" <<-EOSQL
+    -- Create App Database and User
+    CREATE DATABASE vcs_db;
     CREATE ROLE $APP_USER WITH LOGIN PASSWORD '$APP_PASSWORD';
+    
+    -- Create Keycloak Database and User
+    CREATE DATABASE keycloak;
+    CREATE ROLE keycloak WITH LOGIN PASSWORD '$KC_DB_PASSWORD';
+EOSQL
 
-    -- 2. Create the Schema for Isolation
+#APP SCHEMA TASKS
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "vcs_db" <<-EOSQL
+    -- Create the Schema for Isolation
     CREATE SCHEMA IF NOT EXISTS vcs_core;
 
-    -- 3. Set the App User's default path to our schema
+    -- Assign ownership and search path
+    ALTER DATABASE vcs_db OWNER TO $APP_USER;
     ALTER ROLE $APP_USER SET search_path TO vcs_core, public;
 
-    -- 4. Set Permissions
-    GRANT USAGE ON SCHEMA vcs_core TO $APP_USER;
-    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA vcs_core TO $APP_USER;
-    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA vcs_core TO $APP_USER;
-
-    -- 5. Ensure future tables are accessible
+    -- Set Permissions
+    GRANT ALL PRIVILEGES ON SCHEMA vcs_core TO $APP_USER;
+    
+    -- Ensure future tables are accessible
     ALTER DEFAULT PRIVILEGES IN SCHEMA vcs_core 
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO $APP_USER;
     
     ALTER DEFAULT PRIVILEGES IN SCHEMA vcs_core 
     GRANT USAGE, SELECT ON SEQUENCES TO $APP_USER;
+EOSQL
+
+#KEYCLOAK PERMISSIONS
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "keycloak" <<-EOSQL
+    ALTER DATABASE keycloak OWNER TO keycloak;
+    GRANT ALL PRIVILEGES ON DATABASE keycloak TO keycloak;
 EOSQL

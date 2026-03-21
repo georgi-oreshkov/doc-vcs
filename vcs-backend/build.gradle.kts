@@ -37,6 +37,10 @@ dependencies {
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation("org.springframework.modulith:spring-modulith-starter-core")
     implementation("org.springframework.modulith:spring-modulith-starter-jpa")
+    implementation("software.amazon.awssdk:s3")          // Core S3 client
+    implementation("software.amazon.awssdk:s3-presigner") // CRITICAL for presigned URLs
+    implementation("software.amazon.awssdk:netty-nio-client") // Async non-blocking transport
+    implementation("org.aspectj:aspectjweaver")
     compileOnly("org.projectlombok:lombok")
     runtimeOnly("org.postgresql:postgresql")
     annotationProcessor("org.projectlombok:lombok")

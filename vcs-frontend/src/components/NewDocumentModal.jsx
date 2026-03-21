@@ -22,10 +22,10 @@ export default function NewDocumentModal({ isOpen, onOpenChange }) {
         }
     };
 
-    // Функция за запазване
+    // Function to handle saving the document (placeholder for now)
     const handleSave = (onClose) => {
         console.log("Saving document:", { title, file });
-        // Тук по-късно ще добавиш логиката за пращане към бекенда
+        // To-Do: Implement actual upload logic here (e.g., API call)
 
         setTitle("");
         setFile(null);
@@ -56,7 +56,7 @@ export default function NewDocumentModal({ isOpen, onOpenChange }) {
                                 />
                             </div>
 
-                            {/* Зона за качване на файл */}
+                            {/* Upload Zone */}
                             <div>
                                 <p className="text-sm text-zinc-400 mb-2">Upload File</p>
                                 {!file ? (
@@ -82,7 +82,7 @@ export default function NewDocumentModal({ isOpen, onOpenChange }) {
                                         </Button>
                                     </div>
                                 )}
-                                {/* Скрит инпут за файлове */}
+                                {/* Hidden File Input */}
                                 <input
                                     type="file"
                                     ref={fileInputRef}

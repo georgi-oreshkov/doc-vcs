@@ -30,7 +30,6 @@ export default function DocumentsView({ setView, onSelectDoc }) {
         </Button>
       </div>
 
-      {/* Подаваме всички стейтове към филтъра чрез spread оператора */}
       <DocumentsFilter {...filterProps} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

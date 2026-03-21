@@ -44,7 +44,17 @@ export default function DocumentCard({ doc, onSelect }) {
           ) : (
             <span className="text-xs text-zinc-600 italic">View Only</span>
           )}
-          <Button isIconOnly variant="light" className="text-zinc-500 min-w-min w-8 h-8">
+          <Button 
+            as="div" 
+            role="button"
+            isIconOnly 
+            variant="light" 
+            className="text-zinc-500 min-w-min w-8 h-8 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation(); 
+              console.log("Опции за документ", doc.id);
+            }}
+          >
             <MoreVertical size={18} />
           </Button>
         </div>
