@@ -2,6 +2,7 @@ plugins {
     java
     id("org.springframework.boot") version "4.0.3"
     id("io.spring.dependency-management") version "1.1.7"
+    id("org.openapi.generator") version "7.20.0"
 }
 
 group = "com.root"
@@ -37,9 +38,10 @@ dependencies {
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation("org.springframework.modulith:spring-modulith-starter-core")
     implementation("org.springframework.modulith:spring-modulith-starter-jpa")
-    implementation("software.amazon.awssdk:s3")          // Core S3 client
-    implementation("software.amazon.awssdk:s3-presigner") // CRITICAL for presigned URLs
+    implementation("software.amazon.awssdk:s3")          // Core S3 client + S3Presigner
     implementation("software.amazon.awssdk:netty-nio-client") // Async non-blocking transport
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6")
+    implementation("org.openapitools:jackson-databind-nullable:0.2.6")
     implementation("org.aspectj:aspectjweaver")
     compileOnly("org.projectlombok:lombok")
     runtimeOnly("org.postgresql:postgresql")
@@ -58,9 +60,34 @@ dependencies {
 dependencyManagement {
     imports {
         mavenBom("org.springframework.modulith:spring-modulith-bom:${property("springModulithVersion")}")
+        mavenBom("software.amazon.awssdk:bom:2.34.0")
     }
 }
 
 tasks.withType<Test> {
     useJUnitPlatform()
 }
+
+openApiGenerate {
+    generatorName.set("spring")
+    inputSpec.set("$rootDir/../doc/openapi.json")
+    outputDir.set(layout.buildDirectory.dir("generated").get().asFile.path)
+    apiPackage.set("com.root.vcsbackend.api")
+    modelPackage.set("com.root.vcsbackend.model")
+    configOptions.set(mapOf(
+        "interfaceOnly"         to "true",
+        "useSpringBoot3"        to "true",
+        "useJakartaEe"          to "true",
+        "useTags"               to "true",
+        "documentationProvider" to "springdoc"
+    ))
+}
+
+sourceSets.main {
+    java.srcDir(layout.buildDirectory.dir("generated/src/main/java"))
+}
+
+tasks.named("compileJava") {
+    dependsOn(tasks.named("openApiGenerate"))
+}
+
