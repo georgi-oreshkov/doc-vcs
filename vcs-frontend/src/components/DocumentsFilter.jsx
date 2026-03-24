@@ -39,42 +39,47 @@ export default function DocumentsFilter({
     setSelectedStatus
 }) {
     return (
-        <div className="flex gap-4 mb-8 bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/80">
+        <div className="flex flex-col lg:flex-row gap-4 mb-8 bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/80">
+            
             <Input
-                className="flex-1" variant="bordered"
+                className="w-full lg:flex-1" 
+                variant="bordered"
                 startContent={<Search size={18} className="text-zinc-500" />}
                 placeholder="Search documents by title..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
             />
 
-            <Select
-                isClearable
-                variant="bordered"
-                className="max-w-xs"
-                placeholder="Filter by Author"
-                startContent={<User size={18} className="text-zinc-500" />}
-                selectedKeys={selectedAuthor}
-                onSelectionChange={setSelectedAuthor}
-            >
-                <SelectItem key="You">You</SelectItem>
-                <SelectItem key="Alice Smith">Alice Smith</SelectItem>
-                <SelectItem key="Bob Jones">Bob Jones</SelectItem>
-            </Select>
+            <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
+                <Select
+                    isClearable
+                    variant="bordered"
+                    className="w-full sm:w-1/2 lg:w-48 xl:w-64"
+                    placeholder="Filter by Author"
+                    startContent={<User size={18} className="text-zinc-500" />}
+                    selectedKeys={selectedAuthor}
+                    onSelectionChange={setSelectedAuthor}
+                >
+                    <SelectItem key="You">You</SelectItem>
+                    <SelectItem key="Alice Smith">Alice Smith</SelectItem>
+                    <SelectItem key="Bob Jones">Bob Jones</SelectItem>
+                </Select>
 
-            <Select
-                isClearable
-                variant="bordered"
-                className="max-w-xs"
-                placeholder="Filter by Status"
-                startContent={<Filter size={18} className="text-zinc-500" />}
-                selectedKeys={selectedStatus}
-                onSelectionChange={setSelectedStatus}
-            >
-                <SelectItem key="Approved">Approved</SelectItem>
-                <SelectItem key="In Review">In Review</SelectItem>
-                <SelectItem key="Draft">Draft</SelectItem>
-            </Select>
+                <Select
+                    isClearable
+                    variant="bordered"
+                    className="w-full sm:w-1/2 lg:w-48 xl:w-64"
+                    placeholder="Filter by Status"
+                    startContent={<Filter size={18} className="text-zinc-500" />}
+                    selectedKeys={selectedStatus}
+                    onSelectionChange={setSelectedStatus}
+                >
+                    <SelectItem key="Approved">Approved</SelectItem>
+                    <SelectItem key="In Review">In Review</SelectItem>
+                    <SelectItem key="Draft">Draft</SelectItem>
+                </Select>
+            </div>
+            
         </div>
     );
 }
