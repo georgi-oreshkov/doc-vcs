@@ -1,7 +1,12 @@
-import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, User } from "@heroui/react";
+import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, User, useDisclosure } from "@heroui/react";
+import UpdatePhoto from "./UpdatePhoto";
 
 export default function UserDropdown({ setView }) {
+  const { isOpen, onOpen, onOpenChange } = useDisclosure();
+  const currentPhoto = "https://i.pravatar.cc/150?u=a042581f4e29026024d";
+
   return (
+    <>
     <Dropdown 
         placement="bottom-end" 
         classNames={{
@@ -27,12 +32,18 @@ export default function UserDropdown({ setView }) {
           <p className="font-bold">Signed in as</p>
           <p className="font-bold text-lime-400">Tony Reichert</p>
         </DropdownItem>
-        <DropdownItem key="update_photo">Update photo</DropdownItem>
+        <DropdownItem key="update_photo" onPress={onOpen}>Update photo</DropdownItem>
         <DropdownItem key="help_and_feedback">Help & Feedback</DropdownItem>
         <DropdownItem key="logout" color="danger" onPress={() => setView('login')}>
           Log Out
         </DropdownItem>
       </DropdownMenu>
     </Dropdown>
+    <UpdatePhoto
+        isOpen={isOpen} 
+        onOpenChange={onOpenChange} 
+        currentPhotoUrl={currentPhoto} 
+      />
+    </>
   );
 }
