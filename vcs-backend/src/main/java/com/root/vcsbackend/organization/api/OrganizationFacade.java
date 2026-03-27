@@ -6,6 +6,7 @@ import com.root.vcsbackend.organization.persistence.OrgMembershipRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,5 +26,15 @@ public class OrganizationFacade {
 
     public boolean isMember(UUID orgId, UUID userId) {
         return orgMembershipRepository.existsByOrgIdAndUserId(orgId, userId);
+    }
+
+    /**
+     * Returns true if the user holds one of the given role names in the org.
+     * Used by other modules (e.g. request) for permission checks without importing OrgRole.
+     */
+    public boolean hasRole(UUID orgId, UUID userId, String... roleNames) {
+        return orgMembershipRepository.findByOrgIdAndUserId(orgId, userId)
+            .map(m -> Arrays.asList(roleNames).contains(m.getRole().name()))
+            .orElse(false);
     }
 }

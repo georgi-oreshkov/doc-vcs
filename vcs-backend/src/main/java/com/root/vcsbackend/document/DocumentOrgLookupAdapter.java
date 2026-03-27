@@ -1,5 +1,6 @@
 package com.root.vcsbackend.document;
 
+import com.root.vcsbackend.document.domain.DocumentEntity;
 import com.root.vcsbackend.document.persistence.DocumentRepository;
 import com.root.vcsbackend.shared.security.DocumentOrgLookup;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +22,7 @@ class DocumentOrgLookupAdapter implements DocumentOrgLookup {
     @Override
     public Optional<UUID> findOrgId(UUID docId) {
         return documentRepository.findById(docId)
-            .map(doc -> doc.getOrgId());
+            .map(DocumentEntity::getOrgId);
     }
 }
 

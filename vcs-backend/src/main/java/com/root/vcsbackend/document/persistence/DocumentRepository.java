@@ -15,5 +15,6 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID>,
     Page<DocumentEntity> findByOrgId(UUID orgId, Pageable pageable);
 
     List<DocumentEntity> findByAuthorId(UUID authorId);
-}
 
+    boolean existsByCategoryId(UUID categoryId);
+}

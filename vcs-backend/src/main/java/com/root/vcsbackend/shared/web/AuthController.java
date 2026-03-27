@@ -1,4 +1,4 @@
-package com.root.vcsbackend.controller;
+package com.root.vcsbackend.shared.web;
 
 import com.root.vcsbackend.api.AuthApi;
 import org.springframework.http.HttpStatus;

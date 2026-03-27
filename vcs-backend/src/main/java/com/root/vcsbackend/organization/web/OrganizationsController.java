@@ -4,9 +4,9 @@ import com.root.vcsbackend.api.OrganizationsApi;
 import com.root.vcsbackend.model.CreateOrganizationRequest;
 import com.root.vcsbackend.model.OrgUser;
 import com.root.vcsbackend.model.Organization;
+import com.root.vcsbackend.organization.mapper.OrganizationMapper;
 import com.root.vcsbackend.organization.service.OrganizationService;
-import com.root.vcsbackend.shared.security.CurrentUser;
-import com.root.vcsbackend.shared.security.JwtPrincipal;
+import com.root.vcsbackend.shared.security.SecurityHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,44 +20,59 @@ import java.util.UUID;
 public class OrganizationsController implements OrganizationsApi {
 
     private final OrganizationService organizationService;
+    private final OrganizationMapper organizationMapper;
+    private final SecurityHelper securityHelper;
 
     @Override
-    public ResponseEntity<Organization> createOrganization(CreateOrganizationRequest createOrganizationRequest) {
-        return new ResponseEntity<>(HttpStatus.NOT_IMPLEMENTED);
+    public ResponseEntity<Organization> createOrganization(CreateOrganizationRequest req) {
+        UUID callerId = securityHelper.currentUser().userId();
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(organizationMapper.toDto(organizationService.createOrganization(req, callerId)));
     }
 
     @Override
     public ResponseEntity<Void> deleteOrganization(UUID orgId) {
-        return new ResponseEntity<>(HttpStatus.NOT_IMPLEMENTED);
+        organizationService.deleteOrganization(orgId);
+        return ResponseEntity.noContent().build();
     }
 
     @Override
     public ResponseEntity<Organization> getOrganization(UUID orgId) {
-        return new ResponseEntity<>(HttpStatus.NOT_IMPLEMENTED);
+        return ResponseEntity.ok(organizationMapper.toDto(organizationService.getOrganization(orgId)));
     }
 
     @Override
     public ResponseEntity<List<OrgUser>> listOrgUsers(UUID orgId) {
-        return new ResponseEntity<>(HttpStatus.NOT_IMPLEMENTED);
+        List<OrgUser> users = organizationService.listOrgUsers(orgId).stream()
+            .map(organizationMapper::toOrgUserDto)
+            .toList();
+        return ResponseEntity.ok(users);
     }
 
     @Override
     public ResponseEntity<List<Organization>> listOrganizations() {
-        return new ResponseEntity<>(HttpStatus.NOT_IMPLEMENTED);
+        UUID callerId = securityHelper.currentUser().userId();
+        List<Organization> orgs = organizationService.listOrganizations(callerId).stream()
+            .map(organizationMapper::toDto)
+            .toList();
+        return ResponseEntity.ok(orgs);
     }
 
     @Override
     public ResponseEntity<Void> removeOrgUser(UUID orgId, UUID userId) {
-        return new ResponseEntity<>(HttpStatus.NOT_IMPLEMENTED);
+        organizationService.removeOrgUser(orgId, userId);
+        return ResponseEntity.noContent().build();
     }
 
     @Override
-    public ResponseEntity<Organization> updateOrganization(UUID orgId, CreateOrganizationRequest createOrganizationRequest) {
-        return new ResponseEntity<>(HttpStatus.NOT_IMPLEMENTED);
+    public ResponseEntity<Organization> updateOrganization(UUID orgId, CreateOrganizationRequest req) {
+        return ResponseEntity.ok(
+            organizationMapper.toDto(organizationService.updateOrganization(orgId, req)));
     }
 
     @Override
     public ResponseEntity<OrgUser> upsertOrgUserRole(UUID orgId, OrgUser orgUser) {
-        return new ResponseEntity<>(HttpStatus.NOT_IMPLEMENTED);
+        return ResponseEntity.ok(
+            organizationMapper.toOrgUserDto(organizationService.upsertOrgUserRole(orgId, orgUser)));
     }
 }

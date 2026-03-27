@@ -2,7 +2,7 @@ package com.root.vcsbackend.notification.service;
 
 import com.root.vcsbackend.notification.domain.NotificationDto;
 import com.root.vcsbackend.notification.domain.NotificationEntity;
-import com.root.vcsbackend.notification.domain.NotificationEvent;
+import com.root.vcsbackend.notification.api.NotificationEvent;
 import com.root.vcsbackend.notification.persistence.NotificationRepository;
 import com.root.vcsbackend.notification.sse.SseEmitterRegistry;
 import com.root.vcsbackend.shared.exception.AppException;

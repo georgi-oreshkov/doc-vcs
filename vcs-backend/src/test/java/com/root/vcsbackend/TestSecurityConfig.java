@@ -9,7 +9,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import java.time.Instant;
 
 /**
- * Replaces the auto-configured {@link JwtDecoder} in tests so the application
+ * Replaces the autoconfigured {@link JwtDecoder} in tests so the application
  * context can load without an active Keycloak / OIDC discovery endpoint.
  */
 @TestConfiguration
