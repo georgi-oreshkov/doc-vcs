@@ -1,18 +1,25 @@
 package com.root.vcsbackend.shared.s3;
 
+import com.root.vcsbackend.shared.config.S3Properties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
-import java.util.UUID;
+import java.time.Duration;
 
 @Service
 @RequiredArgsConstructor
 public class S3PresignService {
 
-    // TODO: inject software.amazon.awssdk.services.s3.presigner.S3Presigner
+    private final S3Presigner presigner;
+    private final S3Properties s3Properties;
 
     /**
      * Generates a pre-signed PUT URL for uploading a document version.
@@ -24,8 +31,17 @@ public class S3PresignService {
         backoff = @Backoff(delay = 300, multiplier = 2.0)
     )
     public String generateUploadUrl(String s3Key) {
-        // TODO: implement — S3Presigner.presignPutObject(...)
-        return null;
+        var putRequest = PutObjectRequest.builder()
+                .bucket(s3Properties.bucket())
+                .key(s3Key)
+                .build();
+
+        var presignRequest = PutObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofMinutes(s3Properties.presignDurationMinutes()))
+                .putObjectRequest(putRequest)
+                .build();
+
+        return presigner.presignPutObject(presignRequest).url().toString();
     }
 
     /**
@@ -38,8 +54,17 @@ public class S3PresignService {
         backoff = @Backoff(delay = 300, multiplier = 2.0)
     )
     public String generateDownloadUrl(String s3Key) {
-        // TODO: implement — S3Presigner.presignGetObject(...)
-        return null;
+        var getRequest = GetObjectRequest.builder()
+                .bucket(s3Properties.bucket())
+                .key(s3Key)
+                .build();
+
+        var presignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofMinutes(s3Properties.presignDurationMinutes()))
+                .getObjectRequest(getRequest)
+                .build();
+
+        return presigner.presignGetObject(presignRequest).url().toString();
     }
 
     /** Fallback if all generateUploadUrl retries are exhausted. */

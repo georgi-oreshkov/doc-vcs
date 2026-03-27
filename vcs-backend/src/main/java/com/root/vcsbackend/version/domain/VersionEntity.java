@@ -11,7 +11,10 @@ import lombok.Setter;
 import java.util.UUID;
 
 @Entity
-@Table(name = "versions")
+@Table(
+    name = "versions",
+    uniqueConstraints = @UniqueConstraint(columnNames = {"doc_id", "version_number"})
+)
 @Getter
 @Setter
 @Builder
