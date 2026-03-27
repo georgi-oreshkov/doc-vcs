@@ -1,18 +1,15 @@
 package com.root.vcsbackend.document.domain;
 
 import com.root.vcsbackend.shared.domain.BaseEntity;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -20,6 +17,8 @@ import java.util.UUID;
 @Getter
 @Setter
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class DocumentEntity extends BaseEntity {
 
     @Id
@@ -48,8 +47,21 @@ public class DocumentEntity extends BaseEntity {
     @Column(name = "latest_approved_version_id")
     private UUID latestApprovedVersionId;
 
+    /** Reviewers assigned at document creation time. Stored in document_reviewers table. */
+    @Builder.Default
+    @ElementCollection
+    @CollectionTable(name = "document_reviewers", joinColumns = @JoinColumn(name = "document_id"))
+    @Column(name = "reviewer_id", nullable = false)
+    private List<UUID> reviewerIds = new ArrayList<>();
+
+    /** Ensures the collection is never null after JPA no-arg construction. */
+    @PostLoad
+    @PostPersist
+    protected void initCollections() {
+        if (reviewerIds == null) reviewerIds = new ArrayList<>();
+    }
+
     public enum DocumentStatus {
-        DRAFT, PUBLISHED, ARCHIVED
+        DRAFT, PENDING_REVIEW, APPROVED, REJECTED
     }
 }
-

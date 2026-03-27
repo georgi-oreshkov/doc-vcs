@@ -1,5 +1,6 @@
 package com.root.vcsbackend.notification.web;
 
+import com.root.vcsbackend.notification.domain.NotificationDto;
 import com.root.vcsbackend.notification.service.NotificationService;
 import com.root.vcsbackend.notification.sse.SseEmitterRegistry;
 import com.root.vcsbackend.shared.security.CurrentUser;
@@ -26,26 +27,28 @@ public class NotificationController {
     private final NotificationService notificationService;
 
     /**
-     * Client connects once; token passed as query param because
-     * the browser EventSource API cannot set custom headers.
+     * Client connects once; EventSource API cannot set custom headers so this endpoint
+     * is permit-all in SecurityConfig — auth is handled by the SSE registry itself.
+     * All unread notifications are flushed on connect so the client starts up-to-date.
      */
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(@CurrentUser JwtPrincipal principal) {
-        // TODO: send all unread notifications on connect, then register emitter
-        return null;
+        UUID userId = principal.userId();
+        // Push all unread before registering so none are missed
+        notificationService.getUnread(userId)
+            .forEach(n -> registry.send(userId, n));
+        return registry.register(userId);
     }
 
     @GetMapping
-    public ResponseEntity<List<?>> list(@CurrentUser JwtPrincipal principal) {
-        // TODO: return all notifications for current user (mapped to DTO)
-        return null;
+    public ResponseEntity<List<NotificationDto>> list(@CurrentUser JwtPrincipal principal) {
+        return ResponseEntity.ok(notificationService.getAll(principal.userId()));
     }
 
     @PostMapping("/{id}/read")
     public ResponseEntity<Void> markRead(@PathVariable UUID id,
                                          @CurrentUser JwtPrincipal principal) {
-        // TODO: notificationService.markRead(id, principal.getUserId())
+        notificationService.markRead(id, principal.userId());
         return ResponseEntity.noContent().build();
     }
 }
-

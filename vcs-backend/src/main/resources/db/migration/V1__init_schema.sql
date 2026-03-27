@@ -1,5 +1,4 @@
 -- V1: initial schema
--- TODO: write DDL for all entities matching the JPA entity classes
 
 -- user_profiles
 CREATE TABLE user_profiles (
@@ -21,7 +20,7 @@ CREATE TABLE organizations (
     created_by  UUID
 );
 
--- org_memberships
+-- org_memberships  (role: ADMIN | AUTHOR | REVIEWER | READER)
 CREATE TABLE org_memberships (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id      UUID NOT NULL REFERENCES organizations(id),
@@ -37,13 +36,13 @@ CREATE TABLE categories (
     name    VARCHAR(255) NOT NULL
 );
 
--- documents
+-- documents  (status: DRAFT | PENDING_REVIEW | APPROVED | REJECTED)
 CREATE TABLE documents (
     id                           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id                       UUID NOT NULL REFERENCES organizations(id),
     author_id                    UUID NOT NULL REFERENCES user_profiles(id),
     name                         VARCHAR(255) NOT NULL,
-    status                       VARCHAR(50) NOT NULL,
+    status                       VARCHAR(50) NOT NULL DEFAULT 'DRAFT',
     category_id                  UUID REFERENCES categories(id),
     latest_version_id            UUID,
     latest_approved_version_id   UUID,
@@ -52,17 +51,26 @@ CREATE TABLE documents (
     created_by                   UUID
 );
 
--- versions
+-- document_reviewers  (ElementCollection for reviewer_ids on DocumentEntity)
+CREATE TABLE document_reviewers (
+    document_id  UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    reviewer_id  UUID NOT NULL REFERENCES user_profiles(id),
+    PRIMARY KEY (document_id, reviewer_id)
+);
+
+-- versions  (status: PENDING | APPROVED | REJECTED)
 CREATE TABLE versions (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     doc_id          UUID NOT NULL REFERENCES documents(id),
     version_number  INT NOT NULL,
-    status          VARCHAR(50) NOT NULL,
+    status          VARCHAR(50) NOT NULL DEFAULT 'PENDING',
     is_draft        BOOLEAN NOT NULL DEFAULT TRUE,
+    checksum        VARCHAR(128),
     s3_key          VARCHAR(1024) NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL,
     updated_at      TIMESTAMPTZ NOT NULL,
-    created_by      UUID
+    created_by      UUID,
+    UNIQUE (doc_id, version_number)
 );
 
 -- comments
@@ -70,23 +78,22 @@ CREATE TABLE comments (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     version_id  UUID NOT NULL REFERENCES versions(id),
     author_id   UUID NOT NULL REFERENCES user_profiles(id),
-    body        TEXT NOT NULL,
+    content     TEXT NOT NULL,
     created_at  TIMESTAMPTZ NOT NULL,
     updated_at  TIMESTAMPTZ NOT NULL,
     created_by  UUID
 );
 
--- fork_requests
+-- fork_requests  (status: PENDING | APPROVED | REJECTED | CANCELLED)
 CREATE TABLE fork_requests (
-    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    type             VARCHAR(50) NOT NULL,
-    requester_id     UUID NOT NULL REFERENCES user_profiles(id),
-    doc_id           UUID NOT NULL REFERENCES documents(id),
-    from_version_id  UUID REFERENCES versions(id),
-    status           VARCHAR(50) NOT NULL,
-    created_at       TIMESTAMPTZ NOT NULL,
-    updated_at       TIMESTAMPTZ NOT NULL,
-    created_by       UUID
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    requester_id  UUID NOT NULL REFERENCES user_profiles(id),
+    doc_id        UUID NOT NULL REFERENCES documents(id),
+    version_id    UUID NOT NULL REFERENCES versions(id),
+    status        VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+    created_at    TIMESTAMPTZ NOT NULL,
+    updated_at    TIMESTAMPTZ NOT NULL,
+    created_by    UUID
 );
 
 -- notifications
@@ -98,4 +105,3 @@ CREATE TABLE notifications (
     read_at       TIMESTAMPTZ,
     created_at    TIMESTAMPTZ NOT NULL
 );
-

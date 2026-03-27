@@ -1,21 +1,41 @@
 package com.root.vcsbackend.user.mapper;
 
+import com.root.vcsbackend.model.UpdateUserProfileRequest;
+import com.root.vcsbackend.model.UserProfile;
+import com.root.vcsbackend.shared.mapper.JsonNullableMapper;
+import com.root.vcsbackend.shared.mapper.MapStructConfig;
 import com.root.vcsbackend.user.domain.UserProfileEntity;
-import org.springframework.stereotype.Component;
+import org.mapstruct.AfterMapping;
+import org.mapstruct.BeanMapping;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
+import org.mapstruct.NullValuePropertyMappingStrategy;
+import org.openapitools.jackson.nullable.JsonNullable;
 
-@Component
-public class UserMapper {
+import java.net.URI;
 
-    // TODO: import and map to/from generated API model (e.g. UserProfile DTO)
+@Mapper(componentModel = "spring", config = MapStructConfig.class, uses = JsonNullableMapper.class)
+public interface UserMapper {
 
-    public Object toDto(UserProfileEntity entity) {
-        // TODO: implement
-        return null;
-    }
+    @Mapping(target = "photoUrl", source = "photoUrl", qualifiedByName = "stringToJsonNullableUri")
+    UserProfile toDto(UserProfileEntity entity);
 
-    public UserProfileEntity toEntity(Object request) {
-        // TODO: implement
-        return null;
+    /** Patch: ignore null/undefined fields in the request. */
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "email", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "photoUrl", ignore = true) // handled in @AfterMapping due to JsonNullable<URI> → String
+    void applyUpdate(UpdateUserProfileRequest req, @MappingTarget UserProfileEntity entity);
+
+    @AfterMapping
+    default void applyPhotoUrl(UpdateUserProfileRequest req, @MappingTarget UserProfileEntity entity) {
+        JsonNullable<URI> photoUrl = req.getPhotoUrl();
+        if (photoUrl != null && photoUrl.isPresent()) {
+            entity.setPhotoUrl(photoUrl.get() != null ? photoUrl.get().toString() : null);
+        }
     }
 }
-

@@ -7,8 +7,10 @@ import java.util.UUID;
 public record JwtPrincipal(UUID userId, String email, String name) {
 
     public static JwtPrincipal from(Jwt jwt) {
-        // TODO: implement
-        return null;
+        return new JwtPrincipal(
+            UUID.fromString(jwt.getSubject()),
+            jwt.getClaimAsString("email"),
+            jwt.getClaimAsString("name")
+        );
     }
 }
-

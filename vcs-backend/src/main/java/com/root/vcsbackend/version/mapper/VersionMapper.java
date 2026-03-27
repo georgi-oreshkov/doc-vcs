@@ -1,27 +1,54 @@
 package com.root.vcsbackend.version.mapper;
 
+import com.root.vcsbackend.model.AddCommentRequest;
+import com.root.vcsbackend.model.Comment;
+import com.root.vcsbackend.model.CreateVersionRequest;
+import com.root.vcsbackend.model.Version;
+import com.root.vcsbackend.model.Version.StatusEnum;
+import com.root.vcsbackend.shared.mapper.JsonNullableMapper;
+import com.root.vcsbackend.shared.mapper.MapStructConfig;
 import com.root.vcsbackend.version.domain.CommentEntity;
 import com.root.vcsbackend.version.domain.VersionEntity;
-import org.springframework.stereotype.Component;
+import com.root.vcsbackend.version.domain.VersionStatus;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.Named;
 
-@Component
-public class VersionMapper {
+import java.util.UUID;
 
-    // TODO: import and map to/from generated API model DTOs
+@Mapper(componentModel = "spring", config = MapStructConfig.class, uses = JsonNullableMapper.class)
+public interface VersionMapper {
 
-    public Object toDto(VersionEntity entity) {
-        // TODO: implement
-        return null;
-    }
+    @Mapping(target = "status", source = "status", qualifiedByName = "versionStatusToApi")
+    @Mapping(target = "createdAt", source = "createdAt", qualifiedByName = "instantToOffsetDateTime")
+    Version toDto(VersionEntity entity);
 
-    public VersionEntity toEntity(Object createRequest) {
-        // TODO: implement
-        return null;
-    }
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "docId", source = "docId")
+    @Mapping(target = "versionNumber", source = "nextVersionNumber")
+    @Mapping(target = "s3Key", source = "s3Key")
+    @Mapping(target = "isDraft", source = "req.isDraft")
+    @Mapping(target = "checksum", source = "req.checksum")
+    @Mapping(target = "status", constant = "PENDING")
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    VersionEntity toEntity(CreateVersionRequest req, UUID docId, int nextVersionNumber, String s3Key);
 
-    public Object toCommentDto(CommentEntity entity) {
-        // TODO: implement
-        return null;
+    @Mapping(target = "createdAt", source = "createdAt", qualifiedByName = "instantToOffsetDateTime")
+    Comment toCommentDto(CommentEntity entity);
+
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "versionId", source = "versionId")
+    @Mapping(target = "authorId", source = "authorId")
+    @Mapping(target = "content", source = "req.content")
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    CommentEntity toCommentEntity(AddCommentRequest req, UUID versionId, UUID authorId);
+
+    @Named("versionStatusToApi")
+    default StatusEnum versionStatusToApi(VersionStatus status) {
+        return StatusEnum.fromValue(status.name());
     }
 }
-

@@ -1,16 +1,21 @@
 package com.root.vcsbackend.notification.service;
 
+import com.root.vcsbackend.notification.domain.NotificationDto;
 import com.root.vcsbackend.notification.domain.NotificationEntity;
 import com.root.vcsbackend.notification.domain.NotificationEvent;
 import com.root.vcsbackend.notification.persistence.NotificationRepository;
 import com.root.vcsbackend.notification.sse.SseEmitterRegistry;
+import com.root.vcsbackend.shared.exception.AppException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -20,28 +25,48 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final SseEmitterRegistry sseEmitterRegistry;
 
+    /**
+     * Listens to ApplicationEvents from any module.
+     * Persists the notification then pushes it live over SSE if the user is connected.
+     */
     @EventListener
     public void onNotificationEvent(NotificationEvent event) {
-        // TODO:
-        // 1. Persist NotificationEntity
-        // 2. Map to DTO
-        // 3. sseEmitterRegistry.send(event.getRecipientId(), dto)
+        NotificationEntity entity = NotificationEntity.builder()
+            .recipientId(event.getRecipientId())
+            .type(event.getType())
+            .payload(event.getPayload() != null ? event.getPayload().toString() : null)
+            .createdAt(Instant.now())
+            .build();
+        notificationRepository.save(entity);
+
+        NotificationDto dto = NotificationDto.from(entity);
+        sseEmitterRegistry.send(event.getRecipientId(), dto);
     }
 
     @Transactional(readOnly = true)
-    public List<NotificationEntity> getAll(UUID recipientId) {
-        // TODO: implement + map to DTOs
-        return notificationRepository.findByRecipientIdOrderByCreatedAtDesc(recipientId);
+    public List<NotificationDto> getAll(UUID recipientId) {
+        return notificationRepository.findByRecipientIdOrderByCreatedAtDesc(recipientId)
+            .stream()
+            .map(NotificationDto::from)
+            .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
-    public List<NotificationEntity> getUnread(UUID recipientId) {
-        // TODO: implement + map to DTOs
-        return notificationRepository.findByRecipientIdAndReadAtIsNullOrderByCreatedAtDesc(recipientId);
+    public List<NotificationDto> getUnread(UUID recipientId) {
+        return notificationRepository.findByRecipientIdAndReadAtIsNullOrderByCreatedAtDesc(recipientId)
+            .stream()
+            .map(NotificationDto::from)
+            .collect(Collectors.toList());
     }
 
     public void markRead(UUID notificationId, UUID callerId) {
-        // TODO: load notification, verify callerId == recipientId, set readAt = Instant.now()
+        NotificationEntity entity = notificationRepository.findById(notificationId)
+            .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND,
+                "Notification not found: " + notificationId));
+        if (!entity.getRecipientId().equals(callerId)) {
+            throw new AppException(HttpStatus.FORBIDDEN, "Not your notification");
+        }
+        entity.setReadAt(Instant.now());
+        // entity is managed — change is flushed automatically at tx commit
     }
 }
-

@@ -1,16 +1,11 @@
 package com.root.vcsbackend.request.domain;
 
 import com.root.vcsbackend.shared.domain.BaseEntity;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.util.UUID;
@@ -20,15 +15,13 @@ import java.util.UUID;
 @Getter
 @Setter
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class ForkRequestEntity extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private RequestType type;
 
     @Column(name = "requester_id", nullable = false)
     private UUID requesterId;
@@ -36,19 +29,16 @@ public class ForkRequestEntity extends BaseEntity {
     @Column(name = "doc_id", nullable = false)
     private UUID docId;
 
-    @Column(name = "from_version_id")
-    private UUID fromVersionId;
+    /** The specific version the fork is based on. Required, matches OpenAPI version_id. */
+    @Column(name = "version_id", nullable = false)
+    private UUID versionId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private RequestStatus status;
 
-    public enum RequestType {
-        FORK, DELETE
-    }
-
+    /** Matches OpenAPI ForkRequest.status enum exactly. */
     public enum RequestStatus {
-        PENDING, APPROVED, REJECTED
+        PENDING, APPROVED, REJECTED, CANCELLED
     }
 }
-
