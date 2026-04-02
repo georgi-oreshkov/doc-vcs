@@ -80,15 +80,6 @@ services:
       db:
         condition: service_healthy
 
-  redis:
-    image: redis:7-alpine
-    container_name: redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    networks:
-      - docvcs
-
 networks:
   docvcs:
     driver: bridge
