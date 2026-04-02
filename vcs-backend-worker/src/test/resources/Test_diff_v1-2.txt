@@ -1,0 +1,9 @@
+--- old
++++ new
+@@ -1,4 +1,4 @@
+ The company's primary objective for the third quarter is to expand our
+-presence in the European market. We plan to achieve this by opening a new
+-office in Berlin. Additionally, we will hire five new account managers to
++presence in the Asian market. We intend to achieve this by opening a new
++office in Tokio. Additionally, we will hire five new account managers to
+ handle the increased workload.
