@@ -33,6 +33,7 @@ public class VersionQueryGateway {
      * @param targetVersionNumber the version number to reconstruct up to
      * @return the closest preceding snapshot version, or empty if none exists
      */
+    //subject to change
     public Optional<VersionRow> findLastSnapshotBefore(UUID docId, int targetVersionNumber) {
         return jdbcClient.sql("""
                 SELECT id, doc_id, version_number, status, storage_type, checksum, s3_key
