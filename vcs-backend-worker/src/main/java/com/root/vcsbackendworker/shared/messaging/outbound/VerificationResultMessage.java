@@ -1,5 +1,6 @@
-package com.root.vcsbackendworker.shared.messaging;
+package com.root.vcsbackendworker.shared.messaging.outbound;
 
+import com.root.vcsbackendworker.shared.messaging.inbound.MessageMetadata;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
