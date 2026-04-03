@@ -1,4 +1,4 @@
-package com.root.vcsbackendworker.shared.messaging;
+package com.root.vcsbackendworker.shared.messaging.inbound;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -18,7 +18,4 @@ public class VerifyTaskMessage extends WorkerTaskMessage {
 
     // S3 key for the incoming diff uploaded by the client.
     private String diffS3Key;
-
-    // SHA-256 checksum of the expected new full document after applying the diff.
-    private String expectedChecksum;
 }

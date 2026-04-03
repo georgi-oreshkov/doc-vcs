@@ -1,6 +1,6 @@
 package com.root.vcsbackendworker.shared.messaging.outbound;
 
-import com.root.vcsbackendworker.shared.messaging.inbound.MessageMetadata;
+import com.root.vcsbackendworker.shared.messaging.MessageMetadata;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -12,7 +12,7 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class DiffProcessingResultMessage {
+public class VerificationResultMessage {
 
     private MessageMetadata metadata;
 
@@ -23,9 +23,5 @@ public class DiffProcessingResultMessage {
     private FailureReason failureReason;
 
     private String actualChecksum;
-    private String promotedS3Key;
-
-    // Human-readable context for logs/observability; not for control flow.
-    private String details;
 }
 

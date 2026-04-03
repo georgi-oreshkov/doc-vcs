@@ -26,6 +26,7 @@ repositories {
 
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
+    implementation("io.github.java-diff-utils:java-diff-utils:4.12")
     implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
     implementation("software.amazon.awssdk:s3:2.32.26")
@@ -33,6 +34,7 @@ dependencies {
     runtimeOnly("org.postgresql:postgresql")
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-starter-data-redis-test")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

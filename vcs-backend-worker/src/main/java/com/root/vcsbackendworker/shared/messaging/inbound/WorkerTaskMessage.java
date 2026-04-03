@@ -1,7 +1,8 @@
-package com.root.vcsbackendworker.shared.messaging;
+package com.root.vcsbackendworker.shared.messaging.inbound;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.root.vcsbackendworker.shared.messaging.MessageMetadata;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -33,5 +34,8 @@ public abstract class WorkerTaskMessage {
     private WorkerTaskType taskType;
     private UUID docId;
     private UUID versionId;
+
+    // SHA-256 checksum of the expected new full document after applying the diff.
+    private String expectedChecksum;
 }
 

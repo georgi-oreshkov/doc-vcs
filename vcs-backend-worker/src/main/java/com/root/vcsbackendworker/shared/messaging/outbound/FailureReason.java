@@ -1,4 +1,4 @@
-package com.root.vcsbackendworker.shared.messaging;
+package com.root.vcsbackendworker.shared.messaging.outbound;
 
 public enum FailureReason {
     CHECKSUM_MISMATCH,

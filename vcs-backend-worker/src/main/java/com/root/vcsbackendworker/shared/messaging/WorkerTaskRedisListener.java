@@ -1,6 +1,7 @@
 package com.root.vcsbackendworker.shared.messaging;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.root.vcsbackendworker.shared.messaging.inbound.WorkerTaskMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.Message;

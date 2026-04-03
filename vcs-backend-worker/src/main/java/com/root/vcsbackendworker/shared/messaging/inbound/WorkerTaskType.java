@@ -1,4 +1,4 @@
-package com.root.vcsbackendworker.shared.messaging;
+package com.root.vcsbackendworker.shared.messaging.inbound;
 
 public enum WorkerTaskType {
     VERIFY_DIFF,
