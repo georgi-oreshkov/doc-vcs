@@ -29,7 +29,7 @@ Each top-level package under `com.root.vcsbackend` is a `@ApplicationModule` (de
 | `request` | Fork requests |
 | `notification` | Persist + push notifications via SSE |
 | `user` | User profile sync from Keycloak |
-| `shared` | Cross-cutting: security, config, S3, exceptions, mappers |
+| `shared` | Cross-cutting: security, config, S3, Redis messaging, exceptions, mappers |
 
 **Cross-module calls must go through the `api/` Facade** (e.g., `DocumentFacade`, `VersionFacade`, `OrganizationFacade`). Direct use of another module's repositories or services is forbidden by Modulith's package boundary enforcement.
 
@@ -103,6 +103,27 @@ events.publishEvent(new NotificationEvent(this, recipientId, "VERSION_APPROVED",
 
 ---
 
+## Redis Pub/Sub — Worker Communication
+
+The backend communicates with the `vcs-backend-worker` service over Redis Pub/Sub:
+
+1. **Publish** — `DiffTaskPublisher` (in `shared/redis/`) serializes `VerifyTaskMessage` or `ReconstructTaskMessage` to JSON and publishes to the **jobs channel** (`vcs.diff.jobs`).
+2. **Subscribe** — `DiffResultListener` (in `shared/redis/`) receives results on the **results channel** (`vcs.diff.results`), deserializes, and fires a `DiffResultEvent` (Spring `ApplicationEvent`).
+3. **Handle** — `DiffResultHandler` (in `version/service/`) listens for `DiffResultEvent`, updates the version entity as needed, and pushes an SSE notification via `NotificationEvent`.
+
+Message DTOs live in `shared/redis/message/` and mirror the worker's contract:
+- **Inbound** (backend → worker): `WorkerTaskMessage` (abstract, polymorphic via `taskType`), `VerifyTaskMessage`, `ReconstructTaskMessage`
+- **Outbound** (worker → backend): `VerificationResultMessage`, `ReconstructionResultMessage`
+- **Shared**: `MessageMetadata`, `ProcessingStatus`, `FailureReason`, `WorkerTaskType`
+
+A **correlation cache** (`ConcurrentHashMap<UUID, UUID>`) in `DiffTaskPublisher` maps `correlationId → userId` so the result listener can determine which user to notify via SSE.
+
+Config: `app.redis.diff-jobs-channel` (env: `WORKER_CHANNEL`), `app.redis.diff-results-channel` (env: `WORKER_RESULT_CHANNEL`).
+
+**Important:** Uses Jackson 3 (`tools.jackson.databind.json.JsonMapper`), not Jackson 2 (`com.fasterxml.jackson.databind.ObjectMapper`). Spring Boot 4 auto-configures `JsonMapper`.
+
+---
+
 ## Database
 
 - Schema: `vcs_core` (all tables live here; Flyway also targets this schema).
@@ -130,6 +151,9 @@ events.publishEvent(new NotificationEvent(this, recipientId, "VERSION_APPROVED",
 | `KC_ISSUER_URI` | `http://localhost:8080/realms/vcs` | Keycloak JWT issuer |
 | `S3_ENDPOINT` / `S3_BUCKET` | `http://localhost:9000/vcs-documents` | MinIO/S3 |
 | `S3_ACCESS_KEY` / `S3_SECRET_KEY` | `minioadmin/minioadmin` | MinIO credentials |
+| `REDIS_HOST` / `REDIS_PORT` | `localhost/16379` | Redis |
+| `WORKER_CHANNEL` | `vcs.diff.jobs` | Redis channel: backend → worker tasks |
+| `WORKER_RESULT_CHANNEL` | `vcs.diff.results` | Redis channel: worker → backend results |
 
 ---
 
@@ -143,5 +167,10 @@ events.publishEvent(new NotificationEvent(this, recipientId, "VERSION_APPROVED",
 | `src/main/java/.../shared/config/SecurityConfig.java` | Filter chain, JWT converter, permit-all rules |
 | `src/main/java/.../shared/security/OrgRoleEvaluator.java` | SpEL security evaluator used in `@PreAuthorize` |
 | `src/main/java/.../shared/mapper/MapStructConfig.java` | Global MapStruct config (read the Javadoc) |
+| `src/main/java/.../shared/redis/DiffTaskPublisher.java` | Publishes verify/reconstruct tasks to worker via Redis |
+| `src/main/java/.../shared/redis/DiffResultListener.java` | Subscribes to worker results channel, fires DiffResultEvent |
+| `src/main/java/.../shared/redis/DiffResultEvent.java` | Cross-module event for worker results |
+| `src/main/java/.../shared/redis/message/` | Message DTOs mirroring the worker's contract |
+| `src/main/java/.../version/service/DiffResultHandler.java` | Handles worker results, updates versions, pushes SSE |
 | `src/main/java/.../notification/domain/NotificationEvent.java` | Cross-module notification contract |
 

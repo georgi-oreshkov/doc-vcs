@@ -45,4 +45,15 @@ public class VersionEntity extends BaseEntity {
 
     @Column(name = "s3_key", nullable = false)
     private String s3Key;
+
+    /**
+     * How this version's content is persisted in S3.
+     * {@code SNAPSHOT} means the S3 key holds the full document;
+     * {@code DIFF} means only a delta is stored and the worker must
+     * reconstruct the full document before it can be downloaded.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "storage_type", nullable = false)
+    @Builder.Default
+    private StorageType storageType = StorageType.SNAPSHOT;
 }

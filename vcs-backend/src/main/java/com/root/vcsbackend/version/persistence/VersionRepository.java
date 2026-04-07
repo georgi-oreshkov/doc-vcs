@@ -16,4 +16,8 @@ public interface VersionRepository extends JpaRepository<VersionEntity, UUID> {
     Page<VersionEntity> findByDocIdOrderByVersionNumberDesc(UUID docId, Pageable pageable);
 
     Optional<VersionEntity> findTopByDocIdOrderByVersionNumberDesc(UUID docId);
+
+    /** Finds the version immediately before {@code versionNumber} for the given document. */
+    Optional<VersionEntity> findTopByDocIdAndVersionNumberLessThanOrderByVersionNumberDesc(
+            UUID docId, int versionNumber);
 }

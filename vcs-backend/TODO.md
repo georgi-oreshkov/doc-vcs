@@ -43,18 +43,51 @@ remove it from the OpenAPI spec and SecurityConfig.
 
 ## High (functional gaps / data issues)
 
-### 5. Diff endpoint is a stub
-**Files:** `version/service/VersionService.java` (getDiff method)
-Returns a hard-coded "vN -> vM" string. Real implementation should either:
-- Download both versions from S3 and compute a text diff, or
-- Return presigned download URLs for both versions and let the client diff.
+### ~~5. Diff endpoint is a stub~~ DONE
+**Fixed:** `version/service/VersionService.java`, `version/domain/VersionEntity.java`,
+`version/domain/StorageType.java`, `version/mapper/VersionMapper.java`,
+`version/web/VersionsController.java`, `V4__add_storage_type_to_versions.sql`
 
-### 6. RedisConfig is an empty stub
-**Files:** `shared/config/RedisConfig.java`
-The TODO inside says "configure RedisConnectionFactory and RedisTemplate beans".
-`spring-boot-starter-data-redis` is a dependency and Redis is running in compose,
-but no beans use it. Either implement caching / session storage or remove the
-dependency to avoid unnecessary connection overhead.
+Full diff / download / reconstruct flow wired up:
+- **`storage_type`** column added to `versions` table (Flyway V4) — values: `SNAPSHOT` (full
+  content at S3 key) or `DIFF` (delta only, worker must reconstruct before download).
+- **`StorageType`** enum + field on `VersionEntity` with `@Builder.Default SNAPSHOT`.
+- **`getDiff`** generates presigned download URLs for both versions; if either is `DIFF`-stored,
+  triggers async reconstruction via Redis worker. Returns a JSON payload in the `diff` field
+  with `fromUrl`, `toUrl`, version numbers, and storage types so the client can fetch both
+  documents and render the diff.
+- **`getVersionDownloadUrl`** auto-triggers reconstruction for `DIFF`-stored versions; the
+  reconstructed document's presigned URL arrives via SSE (`DOCUMENT_RECONSTRUCTED`).
+- **`requestReconstruct`** method available for explicit on-demand reconstruction.
+- **`rollbackVersion`** now copies `storageType` from the target version.
+- Controller passes `callerId` through to service methods for correlation tracking.
+
+### ~~6. RedisConfig is an empty stub~~ DONE
+**Fixed:** `shared/config/RedisConfig.java`, `shared/config/RedisProperties.java`,
+`shared/redis/DiffTaskPublisher.java`, `shared/redis/DiffResultListener.java`,
+`shared/redis/DiffResultEvent.java`, `shared/redis/message/*`,
+`version/service/DiffResultHandler.java`, `version/service/VersionService.java`,
+`version/persistence/VersionRepository.java`, `application.properties`
+
+Full Redis Pub/Sub integration with the `vcs-backend-worker`:
+- **Publish** tasks (`VERIFY_DIFF`, `RECONSTRUCT_DOCUMENT`) to channel `vcs.diff.jobs`
+- **Subscribe** to results on channel `vcs.diff.results` via `RedisMessageListenerContainer`
+- **Message DTOs** in `shared/redis/message/` mirror the worker's contract exactly
+  (polymorphic `WorkerTaskMessage` with Jackson `@JsonTypeInfo`, result messages for
+  verification and reconstruction)
+- **Correlation cache** in `DiffTaskPublisher` maps `correlationId → userId` so the
+  result listener knows which user to notify via SSE
+- **`DiffResultEvent`** (Spring `ApplicationEvent`) bridges the `shared` Redis listener
+  to the `version` module's `DiffResultHandler` without violating Modulith boundaries
+- **`DiffResultHandler`** updates version checksum on successful verification, pushes
+  SSE notifications (`DIFF_VERIFIED`, `DIFF_VERIFICATION_FAILED`,
+  `DOCUMENT_RECONSTRUCTED`, `DOCUMENT_RECONSTRUCTION_FAILED`) via the existing
+  `NotificationEvent` → `NotificationService` → `SseEmitterRegistry` pipeline
+- `VersionService.createVersion()` now publishes a `VERIFY_DIFF` task when a non-draft
+  version is submitted with a checksum
+- New `VersionService.requestReconstruct()` method publishes a `RECONSTRUCT_DOCUMENT` task
+- Channel names configurable via `app.redis.diff-jobs-channel` / `app.redis.diff-results-channel`
+  (env: `WORKER_CHANNEL` / `WORKER_RESULT_CHANNEL`), matching the worker's defaults
 
 ### 7. SSE: only one emitter per user (multi-tab broken)
 **Files:** `notification/sse/SseEmitterRegistry.java`

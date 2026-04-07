@@ -60,12 +60,14 @@ public class VersionsController implements VersionsApi {
 
     @Override
     public ResponseEntity<DiffResponse> getVersionDiff(UUID from, UUID to, UUID docId) {
-        return ResponseEntity.ok(versionService.getDiff(docId, from, to));
+        UUID callerId = securityHelper.currentUser().userId();
+        return ResponseEntity.ok(versionService.getDiff(docId, from, to, callerId));
     }
 
     @Override
     public ResponseEntity<GetVersionDownloadUrl200Response> getVersionDownloadUrl(UUID docId, UUID versionId) {
-        return ResponseEntity.ok(versionService.getDownloadUrl(docId, versionId));
+        UUID callerId = securityHelper.currentUser().userId();
+        return ResponseEntity.ok(versionService.getDownloadUrl(docId, versionId, callerId));
     }
 
     @Override

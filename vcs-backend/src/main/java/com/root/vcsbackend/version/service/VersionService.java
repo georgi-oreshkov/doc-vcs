@@ -8,9 +8,14 @@ import com.root.vcsbackend.model.RejectVersionRequest;
 import com.root.vcsbackend.model.S3UploadResponse;
 import com.root.vcsbackend.notification.api.NotificationEvent;
 import com.root.vcsbackend.shared.exception.AppException;
+import com.root.vcsbackend.shared.redis.DiffTaskPublisher;
+import com.root.vcsbackend.shared.redis.message.ReconstructTaskMessage;
+import com.root.vcsbackend.shared.redis.message.VerifyTaskMessage;
+import com.root.vcsbackend.shared.redis.message.WorkerTaskType;
 import com.root.vcsbackend.shared.s3.S3PresignService;
 import com.root.vcsbackend.shared.security.OrgRoleLookup;
 import com.root.vcsbackend.version.domain.CommentEntity;
+import com.root.vcsbackend.version.domain.StorageType;
 import com.root.vcsbackend.version.domain.VersionEntity;
 import com.root.vcsbackend.version.domain.VersionStatus;
 import com.root.vcsbackend.version.mapper.VersionMapper;
@@ -43,6 +48,8 @@ public class VersionService {
     private final VersionMapper versionMapper;
     /** Used for fine-grained role checks inside approve/reject/rollback. */
     private final OrgRoleLookup orgRoleLookup;
+    /** Publishes verify / reconstruct tasks to the worker via Redis. */
+    private final DiffTaskPublisher diffTaskPublisher;
 
     @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
     public S3UploadResponse createVersion(UUID docId, CreateVersionRequest req, UUID callerId) {
@@ -61,6 +68,23 @@ public class VersionService {
         // Submitting a non-draft version puts the document into review
         if (Boolean.FALSE.equals(version.getIsDraft())) {
             documentFacade.updateStatusToPendingReview(docId);
+
+            // If the request carries a checksum and a diff S3 key, ask the worker
+            // to verify the diff against the previous version.
+            String diffS3Key = s3Key + ".diff";
+            String previousS3Key = findPreviousVersionS3Key(docId, nextNumber);
+            if (previousS3Key != null && req.getChecksum() != null) {
+                diffTaskPublisher.publishVerifyTask(
+                        VerifyTaskMessage.builder()
+                                .taskType(WorkerTaskType.VERIFY_DIFF)
+                                .docId(docId)
+                                .versionId(version.getId())
+                                .expectedChecksum(req.getChecksum())
+                                .latestVersionS3Key(previousS3Key)
+                                .diffS3Key(diffS3Key)
+                                .build(),
+                        callerId);
+            }
         }
 
         return new S3UploadResponse().uploadUrl(java.net.URI.create(s3PresignService.generateUploadUrl(s3Key)));
@@ -134,21 +158,93 @@ public class VersionService {
         return commentRepository.findByVersionIdOrderByCreatedAtAsc(versionId);
     }
 
+    /**
+     * Publishes a reconstruct task to the worker so it assembles the full document
+     * at the given version from snapshot + diffs, uploads it to a temp S3 key,
+     * and returns a presigned download URL via Redis → SSE.
+     */
+    @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
+    public void requestReconstruct(UUID docId, UUID versionId, UUID callerId) {
+        VersionEntity version = resolveAndValidate(docId, versionId);
+
+        diffTaskPublisher.publishReconstructTask(
+                ReconstructTaskMessage.builder()
+                        .taskType(WorkerTaskType.RECONSTRUCT_DOCUMENT)
+                        .docId(docId)
+                        .versionId(versionId)
+                        .expectedChecksum(version.getChecksum())
+                        .targetVersionNumber(version.getVersionNumber())
+                        .build(),
+                callerId);
+    }
+
+    /**
+     * Returns a presigned download URL for the version's content.
+     * <p>
+     * If the version is stored as a full {@code SNAPSHOT}, the URL points to the
+     * full document and the client can download it immediately.
+     * <p>
+     * If the version is stored as a {@code DIFF}, this method triggers an async
+     * reconstruction via the worker. The reconstructed document's presigned URL
+     * will arrive via SSE ({@code DOCUMENT_RECONSTRUCTED} notification). In the
+     * meantime the returned URL points to the raw diff file in S3.
+     */
     @Transactional(readOnly = true)
     @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
-    public GetVersionDownloadUrl200Response getDownloadUrl(UUID docId, UUID versionId) {
+    public GetVersionDownloadUrl200Response getDownloadUrl(UUID docId, UUID versionId, UUID callerId) {
         VersionEntity version = resolveAndValidate(docId, versionId);
+
+        if (version.getStorageType() == StorageType.DIFF) {
+            diffTaskPublisher.publishReconstructTask(
+                    ReconstructTaskMessage.builder()
+                            .taskType(WorkerTaskType.RECONSTRUCT_DOCUMENT)
+                            .docId(docId)
+                            .versionId(versionId)
+                            .expectedChecksum(version.getChecksum())
+                            .targetVersionNumber(version.getVersionNumber())
+                            .build(),
+                    callerId);
+        }
+
         return new GetVersionDownloadUrl200Response()
             .downloadUrl(java.net.URI.create(s3PresignService.generateDownloadUrl(version.getS3Key())));
     }
 
+    /**
+     * Computes a diff response between two versions of the same document.
+     * <p>
+     * For each version:
+     * <ul>
+     *   <li><b>SNAPSHOT</b> — a presigned download URL is generated directly.</li>
+     *   <li><b>DIFF</b> — an async reconstruction is triggered via Redis so the
+     *       worker assembles the full document. The presigned URL will arrive via
+     *       SSE ({@code DOCUMENT_RECONSTRUCTED}). Meanwhile the raw diff URL is
+     *       returned.</li>
+     * </ul>
+     * The {@code diff} field in the response contains a JSON object with
+     * {@code fromUrl} and {@code toUrl} presigned download URLs and metadata so
+     * the client can fetch both versions and render the diff in the UI.
+     */
     @Transactional(readOnly = true)
     @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
-    public DiffResponse getDiff(UUID docId, UUID fromId, UUID toId) {
+    public DiffResponse getDiff(UUID docId, UUID fromId, UUID toId, UUID callerId) {
         VersionEntity from = resolveAndValidate(docId, fromId);
         VersionEntity to   = resolveAndValidate(docId, toId);
-        String summary = "v%d → v%d".formatted(from.getVersionNumber(), to.getVersionNumber());
-        return new DiffResponse().fromVersionId(fromId).toVersionId(toId).diff(summary);
+
+        String fromUrl = presignOrReconstruct(docId, from, callerId);
+        String toUrl   = presignOrReconstruct(docId, to, callerId);
+
+        String diffPayload = """
+                {"fromUrl":"%s","toUrl":"%s","fromVersion":%d,"toVersion":%d,"fromStorageType":"%s","toStorageType":"%s"}"""
+                .formatted(
+                        fromUrl, toUrl,
+                        from.getVersionNumber(), to.getVersionNumber(),
+                        from.getStorageType(), to.getStorageType());
+
+        return new DiffResponse()
+                .fromVersionId(fromId)
+                .toVersionId(toId)
+                .diff(diffPayload);
     }
 
     @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
@@ -163,6 +259,7 @@ public class VersionService {
             .docId(docId).versionNumber(nextNumber)
             .status(VersionStatus.PENDING).isDraft(false)
             .s3Key(target.getS3Key()).checksum(target.getChecksum())
+            .storageType(target.getStorageType())
             .build());
 
         documentFacade.updateLatestVersionId(docId, rollback.getId());
@@ -171,6 +268,37 @@ public class VersionService {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Returns a presigned download URL for a version's S3 object.
+     * If the version is stored as a DIFF, also triggers async reconstruction
+     * so the full-document URL will arrive via SSE later.
+     */
+    private String presignOrReconstruct(UUID docId, VersionEntity version, UUID callerId) {
+        if (version.getStorageType() == StorageType.DIFF) {
+            diffTaskPublisher.publishReconstructTask(
+                    ReconstructTaskMessage.builder()
+                            .taskType(WorkerTaskType.RECONSTRUCT_DOCUMENT)
+                            .docId(docId)
+                            .versionId(version.getId())
+                            .expectedChecksum(version.getChecksum())
+                            .targetVersionNumber(version.getVersionNumber())
+                            .build(),
+                    callerId);
+        }
+        return s3PresignService.generateDownloadUrl(version.getS3Key());
+    }
+
+    /**
+     * Returns the S3 key of the version immediately before {@code currentNumber},
+     * or {@code null} if this is the first version.
+     */
+    private String findPreviousVersionS3Key(UUID docId, int currentNumber) {
+        if (currentNumber <= 1) return null;
+        return versionRepository.findTopByDocIdAndVersionNumberLessThanOrderByVersionNumberDesc(docId, currentNumber)
+                .map(VersionEntity::getS3Key)
+                .orElse(null);
+    }
 
     private VersionEntity resolveAndValidate(UUID docId, UUID versionId) {
         VersionEntity v = versionRepository.findById(versionId)

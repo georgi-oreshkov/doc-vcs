@@ -30,6 +30,7 @@ public interface VersionMapper {
     @Mapping(target = "isDraft", source = "req.isDraft")
     @Mapping(target = "checksum", source = "req.checksum")
     @Mapping(target = "status", constant = "PENDING")
+    @Mapping(target = "storageType", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
