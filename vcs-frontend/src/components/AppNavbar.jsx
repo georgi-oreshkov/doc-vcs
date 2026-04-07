@@ -13,6 +13,7 @@ export default function AppNavbar({ currentView, setView }) {
     { label: "Organizations", view: "organizations" },
     { label: "My Documents", view: "documents" },
     { label: "Admin Panel", view: "admin" },
+    { label: "Approvals", view: "reviewer" },
   ];
 
   const handleNavigation = (view) => {

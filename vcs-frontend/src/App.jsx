@@ -6,11 +6,12 @@ import LandingView from './views/LandingView';
 import OrganizationsView from './views/OrganizationsView';
 import DocumentsView from './views/DocumentsView';
 import DocumentViewerView from './views/DocumentViewerView';
+import ReviewerView from './views/ReviewerView';
 // import AdminPanelView from './views/AdminPanelView';
 
 export default function App() {
-  const [currentView, setCurrentView] = useState('documents'); 
-  const [selectedDoc, setSelectedDoc] = useState(null);
+  const [currentView, setCurrentView] = useState('landing'); 
+  const [selectedDoc, setSelectedDoc] = useState(null)
 
   return (
     <div className="relative min-h-screen flex flex-col overflow-x-hidden bg-black text-white font-sans selection:bg-lime-500/30">
@@ -30,8 +31,9 @@ export default function App() {
       {currentView === 'organizations' && <OrganizationsView setView={setCurrentView} />}
       {currentView === 'documents' && <DocumentsView setView={setCurrentView} onSelectDoc={setSelectedDoc} />}
       {currentView === 'viewer' && <DocumentViewerView setView={setCurrentView} doc={selectedDoc} />}
+      {currentView === 'reviewer' && <ReviewerView setView={setCurrentView} onSelectDoc={setSelectedDoc} />}
       {currentView === 'admin' && <AdminPanelView setView={setCurrentView} />}
-
+     
       <footer className="border-t border-zinc-800 bg-black py-8 text-center text-zinc-500 text-sm mt-auto z-10 relative">
         <p>&copy; 2026 Root Version Control. All rights reserved.</p>
       </footer>
