@@ -13,13 +13,15 @@ Added `CorsConfigurationSource` bean and `.cors()` on the filter chain.
 Allowed origins are driven by `cors.allowed-origins` (env: `CORS_ALLOWED_ORIGINS`),
 defaulting to `http://localhost:3000` for local development.
 
-### 2. Document status never transitions
-**Files:** `version/service/VersionService.java`, `document/api/DocumentFacade.java`
-`DocumentEntity.DocumentStatus` defines `DRAFT, PENDING_REVIEW, APPROVED, REJECTED`,
-but no code ever calls `setStatus()` on a document. When a version is created the
-document stays DRAFT forever; when a version is approved/rejected the document status
-does not change. `DocumentFacade` needs `updateStatus()` methods, and `VersionService`
-(and possibly `DocumentService.createVersion`) must call them at the right transitions.
+### ~~2. Document status never transitions~~ DONE
+**Fixed:** `document/api/DocumentFacade.java`, `version/service/VersionService.java`
+Added `updateStatusToPendingReview`, `updateStatusToApproved`, `updateStatusToRejected`
+to `DocumentFacade` (keeping `DocumentStatus` internal to the document module).
+`VersionService` now drives the state machine:
+- `createVersion(isDraft=false)` → `PENDING_REVIEW`
+- `approveVersion` → `APPROVED`
+- `rejectVersion` → `REJECTED`
+- `rollbackVersion` → `PENDING_REVIEW` (always submits with `isDraft=false`)
 
 ### 3. RequestService has zero PreAuthorize
 **Files:** `request/service/RequestService.java`

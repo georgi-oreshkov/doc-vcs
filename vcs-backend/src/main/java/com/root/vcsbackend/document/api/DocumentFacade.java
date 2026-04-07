@@ -54,4 +54,33 @@ public class DocumentFacade {
         doc.setLatestApprovedVersionId(versionId);
         documentRepository.save(doc);
     }
+
+    // ── Document status transitions ───────────────────────────────────────────
+    // These are called by VersionService at each review lifecycle step.
+    // Keeping DocumentStatus inside this module prevents the version module
+    // from importing an internal domain type.
+
+    /** Called when a non-draft version is submitted for review. */
+    @Transactional
+    public void updateStatusToPendingReview(UUID docId) {
+        DocumentEntity doc = resolveDocument(docId);
+        doc.setStatus(DocumentEntity.DocumentStatus.PENDING_REVIEW);
+        documentRepository.save(doc);
+    }
+
+    /** Called when a version is approved. */
+    @Transactional
+    public void updateStatusToApproved(UUID docId) {
+        DocumentEntity doc = resolveDocument(docId);
+        doc.setStatus(DocumentEntity.DocumentStatus.APPROVED);
+        documentRepository.save(doc);
+    }
+
+    /** Called when a version is rejected. */
+    @Transactional
+    public void updateStatusToRejected(UUID docId) {
+        DocumentEntity doc = resolveDocument(docId);
+        doc.setStatus(DocumentEntity.DocumentStatus.REJECTED);
+        documentRepository.save(doc);
+    }
 }

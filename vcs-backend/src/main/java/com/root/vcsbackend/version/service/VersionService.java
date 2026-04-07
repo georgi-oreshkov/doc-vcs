@@ -58,6 +58,11 @@ public class VersionService {
 
         documentFacade.updateLatestVersionId(docId, version.getId());
 
+        // Submitting a non-draft version puts the document into review
+        if (Boolean.FALSE.equals(version.getIsDraft())) {
+            documentFacade.updateStatusToPendingReview(docId);
+        }
+
         return new S3UploadResponse().uploadUrl(java.net.URI.create(s3PresignService.generateUploadUrl(s3Key)));
     }
 
@@ -86,6 +91,7 @@ public class VersionService {
         version.setIsDraft(false);
         versionRepository.save(version);
         documentFacade.updateLatestApprovedVersionId(docId, versionId);
+        documentFacade.updateStatusToApproved(docId);
 
         UUID authorId = documentFacade.getAuthorId(docId);
         events.publishEvent(new NotificationEvent(this, authorId, "VERSION_APPROVED",
@@ -102,6 +108,7 @@ public class VersionService {
 
         version.setStatus(VersionStatus.REJECTED);
         versionRepository.save(version);
+        documentFacade.updateStatusToRejected(docId);
 
         if (rejectReq != null && rejectReq.getReason() != null && !rejectReq.getReason().isBlank()) {
             commentRepository.save(CommentEntity.builder()
@@ -159,6 +166,7 @@ public class VersionService {
             .build());
 
         documentFacade.updateLatestVersionId(docId, rollback.getId());
+        documentFacade.updateStatusToPendingReview(docId); // rollback always submits for review
         return rollback;
     }
 
