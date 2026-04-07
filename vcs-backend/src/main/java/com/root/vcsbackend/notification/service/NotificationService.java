@@ -8,6 +8,8 @@ import com.root.vcsbackend.notification.sse.SseEmitterRegistry;
 import com.root.vcsbackend.shared.exception.AppException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,6 +59,22 @@ public class NotificationService {
             .stream()
             .map(NotificationDto::from)
             .collect(Collectors.toList());
+    }
+
+    /** Paginated variant of {@link #getAll} for the REST endpoint. */
+    @Transactional(readOnly = true)
+    public Page<NotificationDto> getAllPaged(UUID recipientId, int page, int size) {
+        return notificationRepository
+            .findByRecipientIdOrderByCreatedAtDesc(recipientId, PageRequest.of(page, size))
+            .map(NotificationDto::from);
+    }
+
+    /** Paginated variant of {@link #getUnread} for the REST endpoint. */
+    @Transactional(readOnly = true)
+    public Page<NotificationDto> getUnreadPaged(UUID recipientId, int page, int size) {
+        return notificationRepository
+            .findByRecipientIdAndReadAtIsNullOrderByCreatedAtDesc(recipientId, PageRequest.of(page, size))
+            .map(NotificationDto::from);
     }
 
     public void markRead(UUID notificationId, UUID callerId) {

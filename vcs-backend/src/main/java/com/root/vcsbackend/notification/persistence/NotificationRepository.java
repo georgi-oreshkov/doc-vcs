@@ -1,6 +1,8 @@
 package com.root.vcsbackend.notification.persistence;
 
 import com.root.vcsbackend.notification.domain.NotificationEntity;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -11,5 +13,9 @@ public interface NotificationRepository extends JpaRepository<NotificationEntity
     List<NotificationEntity> findByRecipientIdOrderByCreatedAtDesc(UUID recipientId);
 
     List<NotificationEntity> findByRecipientIdAndReadAtIsNullOrderByCreatedAtDesc(UUID recipientId);
+
+    Page<NotificationEntity> findByRecipientIdOrderByCreatedAtDesc(UUID recipientId, Pageable pageable);
+
+    Page<NotificationEntity> findByRecipientIdAndReadAtIsNullOrderByCreatedAtDesc(UUID recipientId, Pageable pageable);
 }
 

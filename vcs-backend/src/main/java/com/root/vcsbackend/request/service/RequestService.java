@@ -92,13 +92,18 @@ public class RequestService {
 
     @PreAuthorize("isAuthenticated()")
     @Transactional(readOnly = true)
-    public List<ForkRequestEntity> listRequests(UUID callerId, String statusFilter) {
-        // Show requester's own requests
+    public List<ForkRequestEntity> listRequests(UUID callerId, String typeFilter, String statusFilter) {
+        // Only "fork" type exists; any other type yields an empty result.
+        if (typeFilter != null && !typeFilter.isBlank()
+                && !"fork".equalsIgnoreCase(typeFilter.strip())) {
+            return List.of();
+        }
+
         List<ForkRequestEntity> all = forkRequestRepository.findByRequesterId(callerId);
 
         if (statusFilter != null && !statusFilter.isBlank()) {
             try {
-                RequestStatus status = RequestStatus.valueOf(statusFilter.toUpperCase());
+                RequestStatus status = RequestStatus.valueOf(statusFilter.strip().toUpperCase());
                 return all.stream().filter(r -> r.getStatus() == status).toList();
             } catch (IllegalArgumentException e) {
                 throw new AppException(HttpStatus.BAD_REQUEST, "Invalid status: " + statusFilter);

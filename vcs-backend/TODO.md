@@ -89,33 +89,43 @@ Full Redis Pub/Sub integration with the `vcs-backend-worker`:
 - Channel names configurable via `app.redis.diff-jobs-channel` / `app.redis.diff-results-channel`
   (env: `WORKER_CHANNEL` / `WORKER_RESULT_CHANNEL`), matching the worker's defaults
 
-### 7. SSE: only one emitter per user (multi-tab broken)
-**Files:** `notification/sse/SseEmitterRegistry.java`
-`ConcurrentHashMap<UUID, SseEmitter>` overwrites the previous emitter when a user
-opens a second browser tab. Change to `ConcurrentHashMap<UUID, List<SseEmitter>>`
-(or CopyOnWriteArrayList) so all tabs receive events.
+### ~~7. SSE: only one emitter per user (multi-tab broken)~~ DONE
+**Fixed:** `notification/sse/SseEmitterRegistry.java`, `notification/web/NotificationController.java`
+Changed `ConcurrentHashMap<UUID, SseEmitter>` to `ConcurrentHashMap<UUID, CopyOnWriteArrayList<SseEmitter>>`
+so every browser tab gets its own emitter. `send()` fans out to all emitters for a user.
+`remove()` completes all emitters. Lifecycle callbacks (`onCompletion`, `onTimeout`,
+`onError`) clean up individual emitters and prune empty lists.
+Also fixed `NotificationController.stream()`: emitter is now registered *before* flushing
+unread notifications so the initial batch actually reaches the client.
 
-### 8. SSE: no heartbeat / keep-alive
-**Files:** `notification/sse/SseEmitterRegistry.java`
-Long-lived SSE connections are dropped by proxies and load balancers (typically after
-30-60s of silence). Add a `@Scheduled` heartbeat that sends a comment event
-(`: keepalive\n\n`) every ~15s to all registered emitters.
+### ~~8. SSE: no heartbeat / keep-alive~~ DONE
+**Fixed:** `notification/sse/SseEmitterRegistry.java`
+Added `@EnableScheduling` on the registry and a `@Scheduled(fixedRate = 15_000)` heartbeat
+method that sends an SSE comment event (`: keepalive\n\n`) to every registered emitter.
+Comment events are invisible to `EventSource.onmessage` but keep the TCP connection alive
+through proxies and load balancers. Failed emitters are removed and logged at DEBUG level.
 
-### 9. listRequests ignores the type query parameter
-**Files:** `request/web/RequestsController.java`, `request/service/RequestService.java`
-The generated `RequestsApi.listRequests(String type, String status)` passes both
-params, but the controller only forwards `status`. The `type` parameter is silently
-dropped. Either implement type-based filtering or document that it is unused.
+### ~~9. listRequests ignores the type query parameter~~ DONE
+**Fixed:** `request/web/RequestsController.java`, `request/service/RequestService.java`
+Controller now passes the `type` parameter through to `RequestService.listRequests()`.
+The service accepts `typeFilter` — currently only `"fork"` is valid (the sole request
+type). Any unrecognised type returns an empty list. Null/blank `type` returns all.
 
-### 10. N+1 query in OrganizationService.listOrganizations
-**Files:** `organization/service/OrganizationService.java`
-Fetches all memberships for a user, then issues a separate `findById` per org.
-Replace with a single `@Query` JOIN or `findAllById(orgIds)`.
+### ~~10. N+1 query in OrganizationService.listOrganizations~~ DONE
+**Fixed:** `organization/service/OrganizationService.java`
+Replaced the N+1 pattern (fetch memberships, then `findById` per org) with a
+single `findAllById(orgIds)` call. Collects org IDs from memberships first,
+short-circuits on empty list.
 
-### 11. No pagination on notification endpoints
-**Files:** `notification/service/NotificationService.java`, `notification/web/NotificationController.java`
-`getAll()` and `getUnread()` return unbounded lists. For active users this will
-become a performance problem. Add Pageable support.
+### ~~11. No pagination on notification endpoints~~ DONE
+**Fixed:** `notification/persistence/NotificationRepository.java`,
+`notification/service/NotificationService.java`, `notification/web/NotificationController.java`
+Added `Page`-returning repository queries (`findByRecipientId…(UUID, Pageable)`).
+New service methods `getAllPaged(recipientId, page, size)` and
+`getUnreadPaged(recipientId, page, size)`. Controller `GET /notifications` now
+accepts `page` (default 0), `size` (default 20), and `unreadOnly` (default false)
+query params. Returns a Spring `Page<NotificationDto>` with content, totalElements,
+totalPages, etc. Unbounded `getAll()` / `getUnread()` kept for SSE initial flush.
 
 ---
 

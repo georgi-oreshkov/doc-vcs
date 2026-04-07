@@ -46,7 +46,7 @@ public class RequestsController implements RequestsApi {
     @Override
     public ResponseEntity<List<ForkRequest>> listRequests(@Nullable String type, @Nullable String status) {
         UUID callerId = securityHelper.currentUser().userId();
-        List<ForkRequest> requests = requestService.listRequests(callerId, status).stream()
+        List<ForkRequest> requests = requestService.listRequests(callerId, type, status).stream()
             .map(requestMapper::toDto)
             .toList();
         return ResponseEntity.ok(requests);

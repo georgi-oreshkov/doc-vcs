@@ -56,11 +56,13 @@ public class OrganizationService {
 
     @Transactional(readOnly = true)
     public List<OrganizationEntity> listOrganizations(UUID userId) {
-        return orgMembershipRepository.findByUserId(userId).stream()
-            .map(m -> organizationRepository.findById(m.getOrgId())
-                .orElseThrow(() -> new AppException(HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Org not found for membership: " + m.getOrgId())))
+        List<UUID> orgIds = orgMembershipRepository.findByUserId(userId).stream()
+            .map(OrgMembershipEntity::getOrgId)
             .toList();
+        if (orgIds.isEmpty()) {
+            return List.of();
+        }
+        return organizationRepository.findAllById(orgIds);
     }
 
     @Transactional(readOnly = true)
