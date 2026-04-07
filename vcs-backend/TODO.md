@@ -23,20 +23,17 @@ to `DocumentFacade` (keeping `DocumentStatus` internal to the document module).
 - `rejectVersion` → `REJECTED`
 - `rollbackVersion` → `PENDING_REVIEW` (always submits with `isDraft=false`)
 
-### 3. RequestService has zero PreAuthorize
-**Files:** `request/service/RequestService.java`
-All four public methods (`createForkRequest`, `actionRequest`, `cancelRequest`,
-`listRequests`) have no method-level security. Any authenticated user can action
-or cancel anyone else's requests. At minimum:
-- `createForkRequest` — caller must be a member of the document's org.
-- `actionRequest` — already has a manual role check internally but should also use
-  `@PreAuthorize` for consistency.
-- `cancelRequest` — checks ownership internally; add `@PreAuthorize` for the
-  "authenticated" guard at the Spring level.
-- `listRequests` — OK as-is (filters by caller), but a `@PreAuthorize("isAuthenticated()")`
-  would be defensive.
+### ~~3. RequestService has zero PreAuthorize~~ DONE
+**Fixed:** `request/service/RequestService.java`
+- `createForkRequest` — `@PreAuthorize("@orgRoleEvaluator.isDocumentMember(#req.docId, authentication)")`:
+  caller must already be a member of the document's org to request a fork.
+- `actionRequest` — `@PreAuthorize("isAuthenticated()")`: org-level role check
+  (ADMIN / AUTHOR only) is still enforced internally after resolving the request entity.
+- `cancelRequest` — `@PreAuthorize("isAuthenticated()")`: ownership check
+  (requesterId == callerId) still enforced internally.
+- `listRequests` — `@PreAuthorize("isAuthenticated()")`.
 
-### 4. AuthController.authLogin() returns 501 NOT_IMPLEMENTED
+### 4. ~~AuthController.authLogin() returns 501 NOT_IMPLEMENTED~~ DONE
 **Files:** `shared/web/AuthController.java`
 The `/auth/login` endpoint is `permitAll` in SecurityConfig but returns
 NOT_IMPLEMENTED. Either implement it (e.g., redirect to Keycloak OIDC login) or

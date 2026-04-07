@@ -14,6 +14,7 @@ import com.root.vcsbackend.version.api.VersionFacade;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +34,7 @@ public class RequestService {
     private final OrganizationFacade organizationFacade;
     private final RequestMapper requestMapper;
 
+    @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#req.docId, authentication)")
     public ForkRequestEntity createForkRequest(CreateForkRequestRequest req, UUID requesterId) {
         // Validate doc and version exist and version belongs to the doc
         documentFacade.requireExists(req.getDocId());
@@ -50,6 +52,8 @@ public class RequestService {
         return entity;
     }
 
+    // org-level role check (ADMIN / AUTHOR) is done after resolving the request entity
+    @PreAuthorize("isAuthenticated()")
     public void actionRequest(UUID requestId, ActionRequestRequest req, UUID callerId) {
         ForkRequestEntity request = resolve(requestId);
         if (request.getStatus() != RequestStatus.PENDING) {
@@ -72,6 +76,8 @@ public class RequestService {
             Map.of("requestId", requestId)));
     }
 
+    // ownership check (requesterId == callerId) is enforced after resolving the request entity
+    @PreAuthorize("isAuthenticated()")
     public void cancelRequest(UUID requestId, UUID callerId) {
         ForkRequestEntity request = resolve(requestId);
         if (!request.getRequesterId().equals(callerId)) {
@@ -84,6 +90,7 @@ public class RequestService {
         forkRequestRepository.save(request);
     }
 
+    @PreAuthorize("isAuthenticated()")
     @Transactional(readOnly = true)
     public List<ForkRequestEntity> listRequests(UUID callerId, String statusFilter) {
         // Show requester's own requests

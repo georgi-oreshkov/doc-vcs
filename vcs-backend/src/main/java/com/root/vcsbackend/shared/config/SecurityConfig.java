@@ -18,6 +18,7 @@ import java.util.List;
 
 @Configuration
 @EnableMethodSecurity
+@org.springframework.boot.context.properties.EnableConfigurationProperties(KeycloakProperties.class)
 public class SecurityConfig {
 
     /**
