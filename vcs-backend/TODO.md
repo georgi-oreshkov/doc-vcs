@@ -131,41 +131,53 @@ totalPages, etc. Unbounded `getAll()` / `getUnread()` kept for SSE initial flush
 
 ## Medium (code quality / consistency)
 
-### 12. DocumentFacade.resolveDocument() leaks DocumentEntity across modules
-**Files:** `document/api/DocumentFacade.java`
-Returns the full JPA entity to other modules, violating the Modulith boundary pattern
-used by VersionFacade (which returns a VersionSummary record). Expose a lightweight
-record / DTO instead.
+### ~~12. DocumentFacade.resolveDocument() leaks DocumentEntity across modules~~ DONE
+**Fixed:** `document/api/DocumentFacade.java`, `document/api/DocumentSummary.java` (new)
+- `resolveDocument(UUID)` changed from `public` to `private` — it is now an internal
+  implementation detail that can only be called within the facade class itself.
+- New `DocumentSummary` record added to `document/api/` (mirrors `VersionSummary` in
+  `version/api/`). Fields: `id`, `orgId`, `authorId`, `name`, `latestVersionId`,
+  `latestApprovedVersionId`.
+- New public `getDocumentSummary(UUID)` method returns the lightweight record for any
+  cross-module caller that needs document metadata beyond the existing scalar helpers
+  (`requireExists`, `resolveOrgId`, `getAuthorId`). No `DocumentEntity` is ever
+  accessible outside the document module.
 
-### 13. request module has no api/ package or facade
-**Files:** `request/` (entire module)
-Every other feature module (document, version, organization, notification, user) has an
-`api/` package with a `@NamedInterface` and a facade. The request module has none.
-If another module ever needs to query fork requests, it cannot do so cleanly.
+### ~~13. request module has no api/ package or facade~~ DONE
+**Fixed:** `request/api/package-info.java`, `request/api/ForkRequestSummary.java`,
+`request/api/RequestFacade.java` (all new)
+- `request/api/` package created with `@NamedInterface` annotation, consistent with
+  every other feature module (`document/api/`, `version/api/`, etc.).
+- `ForkRequestSummary` record exposes the fields another module legitimately needs
+  (`id`, `requesterId`, `docId`, `versionId`, `status`, `createdAt`) without leaking
+  `ForkRequestEntity`.
+- `RequestFacade` provides three cross-module-safe methods:
+  - `getRequest(UUID)` — fetch by ID, throws 404 if absent
+  - `listByDocument(UUID)` — all requests for a doc (e.g., guard before deletion)
+  - `hasPendingRequest(UUID)` — convenience boolean for guard checks
 
-### 14. Deprecated notification.domain.NotificationEvent alias still exists
-**Files:** `notification/domain/NotificationEvent.java`
-Marked `@Deprecated` — all imports already use `notification.api.NotificationEvent`.
-Delete the deprecated class.
+### ~~14. Deprecated notification.domain.NotificationEvent alias still exists~~ DONE
+**Fixed:** `notification/domain/NotificationEvent.java`
+Deleted the deprecated class. All code already imported `notification.api.NotificationEvent`.
 
-### 15. NotificationEntity does not use BaseEntity / JPA auditing
-**Files:** `notification/domain/NotificationEntity.java`
-Manages `createdAt` manually (`Instant.now()` in service) instead of relying on
-`@CreatedDate`. Has no updatedAt or createdBy. Consider extending BaseEntity for
-consistency, or at minimum add `@PrePersist` for createdAt.
+### ~~15. NotificationEntity does not use BaseEntity / JPA auditing~~ DONE
+**Fixed:** `notification/domain/NotificationEntity.java`, `notification/service/NotificationService.java`,
+`V5__add_audit_fields_and_defaults.sql`
+`NotificationEntity` now extends `BaseEntity` — `createdAt`, `updatedAt`, and `createdBy` are
+populated automatically by `AuditingEntityListener`. Removed the manual `.createdAt(Instant.now())`
+from `NotificationService`. V5 migration adds `updated_at` and `created_by` columns to `notifications`.
 
-### 16. OrgMembershipEntity and CategoryEntity have no audit fields
-**Files:** `organization/domain/OrgMembershipEntity.java`, `document/domain/CategoryEntity.java`
-Neither extends BaseEntity. The DB tables also lack created_at / updated_at for these
-(consistent with v2 schema). Intentional for now but consider adding audit columns if
-you need to track who added a member or when a category was created.
+### ~~16. OrgMembershipEntity and CategoryEntity have no audit fields~~ DONE
+**Fixed:** `organization/domain/OrgMembershipEntity.java`, `document/domain/CategoryEntity.java`,
+`V5__add_audit_fields_and_defaults.sql`
+Both entities now extend `BaseEntity`. V5 migration adds `created_at`, `updated_at`, `created_by`
+columns to `org_memberships` and `categories`.
 
-### 17. V1 migration: timestamp columns lack DEFAULT now()
-**Files:** `src/main/resources/db/migration/V1__init_schema.sql`
-All created_at / updated_at columns are NOT NULL but have no DEFAULT now().
-JPA sets them, but direct SQL inserts (migrations, admin scripts, test fixtures) will
-fail. The v2 reference schema has defaults. Add them in a new V4 migration if direct
-SQL usage is anticipated.
+### ~~17. V1 migration: timestamp columns lack DEFAULT now()~~ DONE
+**Fixed:** `V5__add_audit_fields_and_defaults.sql`
+V5 migration adds `DEFAULT now()` to all `created_at` / `updated_at` columns across
+`user_profiles`, `organizations`, `documents`, `versions`, `comments`, `fork_requests`,
+and `notifications`. Direct SQL inserts no longer require explicit timestamp values.
 
 ---
 
@@ -181,24 +193,25 @@ repository tests. Priority areas:
 - RequestService — authorization edge cases
 - Controller integration tests with @WebMvcTest + mock JWT
 
-### 19. NotificationController is hand-written (not API-first)
-**Files:** `notification/web/NotificationController.java`
-Notifications are not in openapi.json, so this controller does not implement a
-generated interface. This is acceptable since SSE endpoints are hard to express in
-OpenAPI, but document the decision. Consider adding the REST endpoints
-(GET /notifications, POST /notifications/{id}/read) to the spec for client
-codegen consistency.
+### ~~19. NotificationController is hand-written (not API-first)~~ DONE
+**Fixed:** `notification/web/NotificationController.java`
+Added a class-level Javadoc block documenting why this controller deliberately deviates from the
+API-first pattern: the SSE streaming endpoint cannot be expressed cleanly in OpenAPI 3 (no standard
+SSE response type; `EventSource` API cannot set custom headers, breaking normal JWT auth flow).
+The REST endpoints (`GET /notifications`, `POST /notifications/{id}/read`) are noted as candidates
+for future spec inclusion to enable client codegen consistency.
 
-### 20. S3PresignService @Recover methods throw raw RuntimeException
-**Files:** `shared/s3/S3PresignService.java`
-recoverUpload / recoverDownload throw RuntimeException which gets caught by
-GlobalExceptionHandler as a generic 500. Throw AppException(SERVICE_UNAVAILABLE)
-for a cleaner HTTP 503 response.
+### ~~20. S3PresignService @Recover methods throw raw RuntimeException~~ DONE
+**Fixed:** `shared/s3/S3PresignService.java`, `shared/exception/AppException.java`
+Added an `AppException(HttpStatus, String, Throwable)` constructor for cause-chain support.
+`recoverUpload` and `recoverDownload` now throw `AppException(HttpStatus.SERVICE_UNAVAILABLE, …, ex)`
+so `GlobalExceptionHandler` returns a clean HTTP 503 response instead of a generic 500.
 
-### 21. SseEmitterRegistry.send() swallows IOException silently
-**Files:** `notification/sse/SseEmitterRegistry.java`
-When emitter.send() throws, the emitter is removed but nothing is logged.
-Add log.debug so SSE disconnections are observable.
+### ~~21. SseEmitterRegistry.send() swallows IOException silently~~ DONE
+**Fixed:** `notification/sse/SseEmitterRegistry.java`
+Both `send()` and `heartbeat()` now log at DEBUG with the exception message and call
+`emitter.completeWithError(e)` before removing the emitter, ensuring proper Spring
+`SseEmitter` lifecycle cleanup and observable SSE disconnections in logs.
 
 ### 22. PageMeta.totalElements is int (may overflow)
 **Files:** `shared/web/PageMapper.java`
@@ -206,14 +219,13 @@ Add log.debug so SSE disconnections are observable.
 more than 2 billion rows this overflows. Update the OpenAPI PageMeta schema to use
 int64 / long, or accept the pragmatic risk for this project's scale.
 
-### 23. Missing @Transactional on OrgMembershipRepository.deleteByOrgIdAndUserId
-**Files:** `organization/persistence/OrgMembershipRepository.java`
-Spring Data derived delete methods require a wrapping @Transactional or @Modifying.
-The calling service method is @Transactional (class-level), so this works today,
-but adding @Modifying on the repository method is safer and more explicit.
+### ~~23. Missing @Transactional on OrgMembershipRepository.deleteByOrgIdAndUserId~~ DONE
+**Fixed:** `organization/persistence/OrgMembershipRepository.java`
+Added `@Modifying` and `@Transactional` annotations to `deleteByOrgIdAndUserId` so the
+derived delete is explicit and safe regardless of whether a surrounding transaction exists.
 
-### 24. listOrganizations has no @PreAuthorize
-**Files:** `organization/service/OrganizationService.java`
-Returns only the caller's orgs (filtered by userId), so it is safe, but unlike every
-other method it lacks even an isAuthenticated() guard. Add for consistency.
+### ~~24. listOrganizations has no @PreAuthorize~~ DONE
+**Fixed:** `organization/service/OrganizationService.java`
+Added `@PreAuthorize("isAuthenticated()")` to `listOrganizations` for consistency
+with every other service method.
 

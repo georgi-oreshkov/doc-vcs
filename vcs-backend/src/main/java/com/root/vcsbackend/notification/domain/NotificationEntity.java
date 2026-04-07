@@ -1,5 +1,6 @@
 package com.root.vcsbackend.notification.domain;
 
+import com.root.vcsbackend.shared.domain.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -24,7 +25,7 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class NotificationEntity {
+public class NotificationEntity extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -40,8 +41,6 @@ public class NotificationEntity {
     @Column(columnDefinition = "jsonb")
     private String payload;
 
-    @Column(nullable = false, updatable = false)
-    private Instant createdAt;
 
     @Column
     private Instant readAt;

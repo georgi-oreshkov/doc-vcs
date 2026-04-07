@@ -37,7 +37,6 @@ public class NotificationService {
             .recipientId(event.getRecipientId())
             .type(event.getType())
             .payload(event.getPayload() != null ? event.getPayload().toString() : null)
-            .createdAt(Instant.now())
             .build();
         notificationRepository.save(entity);
 

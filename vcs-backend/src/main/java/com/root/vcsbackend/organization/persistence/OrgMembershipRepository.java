@@ -2,6 +2,8 @@ package com.root.vcsbackend.organization.persistence;
 
 import com.root.vcsbackend.organization.domain.OrgMembershipEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -17,5 +19,7 @@ public interface OrgMembershipRepository extends JpaRepository<OrgMembershipEnti
 
     List<OrgMembershipEntity> findByUserId(UUID userId);
 
+    @Modifying
+    @Transactional
     void deleteByOrgIdAndUserId(UUID orgId, UUID userId);
 }

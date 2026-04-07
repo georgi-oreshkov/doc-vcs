@@ -20,6 +20,16 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Notification endpoints — intentionally hand-written rather than generated from the OpenAPI spec.
+ *
+ * <p>The SSE streaming endpoint ({@code GET /notifications/stream}) cannot be expressed cleanly in
+ * OpenAPI 3 (no standard SSE response type, and the {@code EventSource} API forbids custom
+ * request headers which breaks normal JWT auth flow). The REST endpoints
+ * ({@code GET /notifications} and {@code POST /notifications/{id}/read}) are kept here so
+ * that all notification-related routes live in a single controller, but they could be added to
+ * the spec in a future iteration to enable client codegen consistency.
+ */
 @RestController
 @RequestMapping("/notifications")
 @RequiredArgsConstructor

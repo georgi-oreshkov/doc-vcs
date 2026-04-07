@@ -70,6 +70,7 @@ public class SseEmitterRegistry {
                 emitter.send(SseEmitter.event().data(payload));
             } catch (IOException e) {
                 log.debug("SSE send failed for userId={}, removing emitter: {}", userId, e.getMessage());
+                emitter.completeWithError(e);
                 list.remove(emitter);
                 if (list.isEmpty()) {
                     emitters.remove(userId, list);
@@ -101,7 +102,8 @@ public class SseEmitterRegistry {
                 try {
                     emitter.send(SseEmitter.event().comment("keepalive"));
                 } catch (IOException e) {
-                    log.debug("SSE heartbeat failed for userId={}, removing emitter", userId);
+                    log.debug("SSE heartbeat failed for userId={}, removing emitter: {}", userId, e.getMessage());
+                    emitter.completeWithError(e);
                     list.remove(emitter);
                     if (list.isEmpty()) {
                         emitters.remove(userId, list);

@@ -55,6 +55,7 @@ public class OrganizationService {
     }
 
     @Transactional(readOnly = true)
+    @PreAuthorize("isAuthenticated()")
     public List<OrganizationEntity> listOrganizations(UUID userId) {
         List<UUID> orgIds = orgMembershipRepository.findByUserId(userId).stream()
             .map(OrgMembershipEntity::getOrgId)

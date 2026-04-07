@@ -1,7 +1,9 @@
 package com.root.vcsbackend.shared.s3;
 
 import com.root.vcsbackend.shared.config.S3Properties;
+import com.root.vcsbackend.shared.exception.AppException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
@@ -70,12 +72,14 @@ public class S3PresignService {
     /** Fallback if all generateUploadUrl retries are exhausted. */
     @Recover
     public String recoverUpload(Exception ex, String s3Key) {
-        throw new RuntimeException("S3 pre-sign upload URL failed after retries for key: " + s3Key, ex);
+        throw new AppException(HttpStatus.SERVICE_UNAVAILABLE,
+                "S3 pre-sign upload URL failed after retries for key: " + s3Key, ex);
     }
 
     /** Fallback if all generateDownloadUrl retries are exhausted. */
     @Recover
     public String recoverDownload(Exception ex, String s3Key) {
-        throw new RuntimeException("S3 pre-sign download URL failed after retries for key: " + s3Key, ex);
+        throw new AppException(HttpStatus.SERVICE_UNAVAILABLE,
+                "S3 pre-sign download URL failed after retries for key: " + s3Key, ex);
     }
 }

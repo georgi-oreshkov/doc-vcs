@@ -12,6 +12,9 @@ import java.util.UUID;
 
 /**
  * Public API of the document module. Only this class should be used by other modules.
+ * <p>
+ * No internal domain type ({@link DocumentEntity}) is returned from any public method —
+ * callers that need document data receive a {@link DocumentSummary} record instead.
  */
 @Component
 @RequiredArgsConstructor
@@ -19,25 +22,40 @@ public class DocumentFacade {
 
     private final DocumentRepository documentRepository;
 
-    public DocumentEntity resolveDocument(UUID docId) {
-        return documentRepository.findById(docId)
-            .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND,
-                "Document not found: " + docId));
-    }
+    // ── Read ─────────────────────────────────────────────────────────────────
 
-    public UUID resolveOrgId(UUID docId) {
-        return resolveDocument(docId).getOrgId();
-    }
-
-    /** Validates that a document exists; throws 404 if not. Avoids exposing DocumentEntity. */
+    /** Validates that a document exists; throws 404 if not. */
     public void requireExists(UUID docId) {
         resolveDocument(docId);
     }
 
-    /** Returns the authorId without exposing DocumentEntity across module boundaries. */
+    /**
+     * Returns a lightweight summary of the document for cross-module use.
+     * Exposes only the fields other modules legitimately need.
+     */
+    public DocumentSummary getDocumentSummary(UUID docId) {
+        DocumentEntity doc = resolveDocument(docId);
+        return new DocumentSummary(
+                doc.getId(),
+                doc.getOrgId(),
+                doc.getAuthorId(),
+                doc.getName(),
+                doc.getLatestVersionId(),
+                doc.getLatestApprovedVersionId()
+        );
+    }
+
+    /** Returns the owning org ID without exposing {@link DocumentEntity}. */
+    public UUID resolveOrgId(UUID docId) {
+        return resolveDocument(docId).getOrgId();
+    }
+
+    /** Returns the author ID without exposing {@link DocumentEntity}. */
     public UUID getAuthorId(UUID docId) {
         return resolveDocument(docId).getAuthorId();
     }
+
+    // ── Write ────────────────────────────────────────────────────────────────
 
     /** Called by VersionService after creating a new version. */
     @Transactional
@@ -54,11 +72,6 @@ public class DocumentFacade {
         doc.setLatestApprovedVersionId(versionId);
         documentRepository.save(doc);
     }
-
-    // ── Document status transitions ───────────────────────────────────────────
-    // These are called by VersionService at each review lifecycle step.
-    // Keeping DocumentStatus inside this module prevents the version module
-    // from importing an internal domain type.
 
     /** Called when a non-draft version is submitted for review. */
     @Transactional
@@ -82,5 +95,17 @@ public class DocumentFacade {
         DocumentEntity doc = resolveDocument(docId);
         doc.setStatus(DocumentEntity.DocumentStatus.REJECTED);
         documentRepository.save(doc);
+    }
+
+    // ── Internal helper — must NOT be called by other modules ────────────────
+
+    /**
+     * Private: returns the full {@link DocumentEntity} for use only within this facade.
+     * Never expose this to other modules — use {@link #getDocumentSummary} instead.
+     */
+    private DocumentEntity resolveDocument(UUID docId) {
+        return documentRepository.findById(docId)
+            .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND,
+                "Document not found: " + docId));
     }
 }
