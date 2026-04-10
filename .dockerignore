@@ -1,0 +1,30 @@
+# ── Gradle build outputs ─────────────────────────────────────────────────────
+vcs-backend/build/
+vcs-backend/.gradle/
+vcs-backend/bin/
+vcs-backend-worker/build/
+vcs-backend-worker/.gradle/
+vcs-backend-worker/bin/
+
+# ── Frontend (not needed in backend image) ───────────────────────────────────
+vcs-frontend/
+
+# ── Git / IDE ─────────────────────────────────────────────────────────────────
+.git/
+.gitignore
+**/.idea/
+**/*.iml
+**/.vscode/
+
+# ── Logs / runtime data ──────────────────────────────────────────────────────
+logs/
+
+# ── Docs (only openapi.json is needed by the build) ──────────────────────────
+doc/architecture.md
+doc/design.md
+
+# ── Env / secrets ─────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+

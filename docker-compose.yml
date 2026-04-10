@@ -54,6 +54,12 @@ services:
     ports:
       - "127.0.0.1:19000:9000"
       - "127.0.0.1:19001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.2
@@ -78,6 +84,91 @@ services:
       - docvcs
     depends_on:
       db:
+        condition: service_healthy
+
+  vcs-backend:
+    image: vcs-backend:latest
+    build:
+      # Context is the repo root so vcs-backend/Dockerfile can COPY doc/openapi.json
+      context: .
+      dockerfile: vcs-backend/Dockerfile
+    container_name: vcs-backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      # ── Database ──────────────────────────────────────────────────────────
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: vcs_db
+      DB_USER: ${APP_USER:-app_user}
+      DB_PASSWORD: ${APP_PASSWORD:-secret}
+      # ── Keycloak JWT ──────────────────────────────────────────────────────
+      # Solution B from docs/kc_setup_container.md:
+      # KC_ISSUER_URI matches the "iss" claim Keycloak stamps into tokens
+      # (KC_HOSTNAME=localhost → iss=http://localhost:18080/realms/vcs).
+      # KC_JWK_SET_URI points at the Docker-internal address so the backend
+      # can fetch signing keys without leaving the Docker network.
+      KC_ISSUER_URI: http://localhost:18080/realms/vcs
+      KC_JWK_SET_URI: http://keycloak:8080/realms/vcs/protocol/openid-connect/certs
+      KC_CLIENT_ID: ${KC_CLIENT_ID:-vcs-frontend}
+      KC_REDIRECT_URI: ${KC_REDIRECT_URI:-http://localhost:5173/callback}
+      # ── Redis ─────────────────────────────────────────────────────────────
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      WORKER_CHANNEL: ${WORKER_CHANNEL:-vcs.diff.jobs}
+      WORKER_RESULT_CHANNEL: ${WORKER_RESULT_CHANNEL:-vcs.diff.results}
+      # ── S3 / MinIO ────────────────────────────────────────────────────────
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: ${S3_BUCKET:-vcs-documents}
+      S3_REGION: ${S3_REGION:-eu-central-1}
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      # ── CORS ──────────────────────────────────────────────────────────────
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
+    networks:
+      - docvcs
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+
+  vcs-backend-worker:
+    image: vcs-backend-worker:latest
+    build:
+      context: ./vcs-backend-worker
+      dockerfile: Dockerfile
+    container_name: vcs-backend-worker
+    restart: unless-stopped
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: ${S3_BUCKET:-vcs-documents}
+      S3_REGION: ${S3_REGION:-eu-central-1}
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_PRESIGN_MINUTES: ${S3_PRESIGN_MINUTES:-15}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: vcs_db
+      DB_USER: ${APP_USER:-app_user}
+      DB_PASSWORD: ${APP_PASSWORD:-secret}
+      WORKER_CHANNEL: ${WORKER_CHANNEL:-vcs.diff.jobs}
+      WORKER_RESULT_CHANNEL: ${WORKER_RESULT_CHANNEL:-vcs.diff.results}
+    networks:
+      - docvcs
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
 
 networks:

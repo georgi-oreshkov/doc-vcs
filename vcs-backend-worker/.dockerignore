@@ -1,0 +1,19 @@
+# Gradle caches and build output
+.gradle/
+build/
+bin/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+
+# Source control
+.git/
+.gitignore
+.gitattributes
+
+# Docs — not needed in the image
+*.md
+AGENTS.md
+

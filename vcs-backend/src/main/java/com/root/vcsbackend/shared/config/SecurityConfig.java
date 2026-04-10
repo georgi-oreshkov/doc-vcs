@@ -7,6 +7,9 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
@@ -29,6 +32,36 @@ public class SecurityConfig {
      */
     @Value("${cors.allowed-origins:http://localhost:3000}")
     private List<String> allowedOrigins;
+
+    /** Public issuer URI — must match the {@code iss} claim in Keycloak-issued JWTs. */
+    @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}")
+    private String issuerUri;
+
+    /**
+     * JWKS endpoint used to fetch Keycloak's signing keys.
+     * In a fully-containerised setup this points to the Docker-internal address
+     * ({@code http://keycloak:8080/…}) while {@link #issuerUri} stays at the
+     * public address ({@code http://localhost:18080/…}).
+     * @see <a href="docs/kc_setup_container.md">Keycloak container setup guide</a>
+     */
+    @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}")
+    private String jwkSetUri;
+
+    /**
+     * Custom {@link JwtDecoder} that decouples key-fetching from issuer validation.
+     * <ul>
+     *   <li>Fetches JWKS from {@link #jwkSetUri} (reachable inside Docker via service DNS).</li>
+     *   <li>Validates the {@code iss} claim against {@link #issuerUri} (the public URL that
+     *       Keycloak stamps into tokens).</li>
+     * </ul>
+     * Declaring this bean suppresses Spring Boot's autoconfigured {@code JwtDecoder}.
+     */
+    @Bean
+    JwtDecoder jwtDecoder() {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
+        decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(issuerUri));
+        return decoder;
+    }
 
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
