@@ -1,4 +1,4 @@
-package com.root.vcsbackendworker.shared.s3;
+package com.root.vcsbackend.shared.s3;
 
 import java.util.UUID;
 

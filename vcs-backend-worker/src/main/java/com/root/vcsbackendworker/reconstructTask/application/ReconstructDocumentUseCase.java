@@ -3,18 +3,17 @@ package com.root.vcsbackendworker.reconstructTask.application;
 import com.root.vcsbackendworker.shared.db.NotificationWriteGateway;
 import com.root.vcsbackendworker.shared.db.VersionQueryGateway;
 import com.root.vcsbackendworker.shared.db.VersionRow;
-import com.root.vcsbackendworker.shared.diff.DiffApplicationException;
-import com.root.vcsbackendworker.shared.diff.DiffApplicator;
 import com.root.vcsbackendworker.shared.messaging.FailureReason;
 import com.root.vcsbackendworker.shared.messaging.inbound.ReconstructTaskMessage;
+import com.root.vcsbackendworker.shared.reconstruct.ReconstructionException;
+import com.root.vcsbackendworker.shared.reconstruct.Reconstructor;
 import com.root.vcsbackendworker.shared.s3.S3DocumentStorage;
-import com.root.vcsbackendworker.shared.verify.ChecksumVerifier;
+import com.root.vcsbackendworker.shared.s3.S3KeyTemplates;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 
-import java.util.List;
 import java.util.Optional;
 
 @Slf4j
@@ -24,9 +23,8 @@ public class ReconstructDocumentUseCase {
 
     private final VersionQueryGateway versionQueryGateway;
     private final S3DocumentStorage s3;
-    private final DiffApplicator diffApplicator;
-    private final ChecksumVerifier checksumVerifier;
     private final NotificationWriteGateway notificationWriteGateway;
+    private final Reconstructor reconstructor;
 
     public void handle(ReconstructTaskMessage task) {
         log.info("Reconstruct task started: docId={}, versionId={}, targetVersion={}",
@@ -57,74 +55,18 @@ public class ReconstructDocumentUseCase {
                 return;
             }
         } else {
-            // 3. Find the latest snapshot preceding the target version
-            Optional<VersionRow> snapshotOpt = versionQueryGateway
-                    .findLastSnapshotBefore(task.getDocId(), task.getTargetVersionNumber());
-            if (snapshotOpt.isEmpty()) {
-                log.error("No snapshot found before targetVersion={} for docId={}", task.getTargetVersionNumber(), task.getDocId());
-                recordFailure(task, FailureReason.SOURCE_NOT_FOUND);
-                return;
-            }
-            VersionRow snapshot = snapshotOpt.get();
-
-            // 4. Fetch the snapshot bytes as the starting point
-            byte[] current;
             try {
-                current = s3.fetchBytes(snapshot.getS3Key());
-            } catch (NoSuchKeyException e) {
-                log.error("Snapshot not found in S3: key={}", snapshot.getS3Key(), e);
-                recordFailure(task, FailureReason.SOURCE_NOT_FOUND);
-                return;
-            } catch (Exception e) {
-                log.error("Failed to fetch snapshot from S3: key={}", snapshot.getS3Key(), e);
-                recordFailure(task, FailureReason.STORAGE_ERROR);
+                resultBytes = reconstructor.reconstruct(task.getDocId(), task.getTargetVersionNumber(), task.getExpectedChecksum());
+            } catch (ReconstructionException e) {
+                log.error("Reconstruction failed for docId={}, targetVersion={}: {}",
+                        task.getDocId(), task.getTargetVersionNumber(), e.getMessage());
+                recordFailure(task, FailureReason.RECONSTRUCTION_FAILED);
                 return;
             }
-
-            // 5. Fetch and apply each diff in order, discarding intermediate bytes as we go
-            List<VersionRow> diffs = versionQueryGateway.findDiffVersionsBetween(
-                    task.getDocId(), snapshot.getVersionNumber(), task.getTargetVersionNumber());
-
-            log.debug("Applying {} diffs from snapshot v{} to target v{}",
-                    diffs.size(), snapshot.getVersionNumber(), task.getTargetVersionNumber());
-
-            for (VersionRow diff : diffs) {
-                byte[] diffBytes;
-                try {
-                    diffBytes = s3.fetchBytes(diff.getS3Key());
-                } catch (NoSuchKeyException e) {
-                    log.error("Diff not found in S3: key={}, versionNumber={}", diff.getS3Key(), diff.getVersionNumber(), e);
-                    recordFailure(task, FailureReason.SOURCE_NOT_FOUND);
-                    return;
-                } catch (Exception e) {
-                    log.error("Failed to fetch diff from S3: key={}", diff.getS3Key(), e);
-                    recordFailure(task, FailureReason.STORAGE_ERROR);
-                    return;
-                }
-
-                try {
-                    current = diffApplicator.apply(current, diffBytes);
-                } catch (DiffApplicationException e) {
-                    log.error("Failed to apply diff v{} for docId={}", diff.getVersionNumber(), task.getDocId(), e);
-                    recordFailure(task, FailureReason.DIFF_APPLY_FAILED);
-                    return;
-                }
-
-                log.debug("Applied diff v{}", diff.getVersionNumber());
-            }
-
-            resultBytes = current;
-        }
-        // 6. Verify checksum
-        if (!checksumVerifier.matches(resultBytes, task.getExpectedChecksum())) {
-            log.warn("Checksum mismatch after reconstruction: docId={}, expected={}",
-                    task.getDocId(), task.getExpectedChecksum());
-            recordFailure(task, FailureReason.CHECKSUM_MISMATCH);
-            return;
         }
 
         // 7. Upload to a temporary S3 key and generate a presigned GET URL
-        String tempKey = toTempKey(task.getDocId().toString(), task.getTargetVersionNumber());
+        String tempKey = S3KeyTemplates.tempReconstruction(task.getDocId(), task.getTargetVersionNumber());
         try {
             s3.uploadBytes(tempKey, resultBytes);
         } catch (Exception e) {
@@ -150,15 +92,9 @@ public class ReconstructDocumentUseCase {
                 task.getDocId(), task.getVersionId(), tempKey);
     }
 
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    /**
-     * Temporary key for the assembled document, kept separate from permanent version keys.
-     * e.g. {@code tmp/{docId}/v4}
-     */
-    private String toTempKey(String docId, int versionNumber) {
-        return "tmp/" + docId + "/v" + versionNumber;
-    }
 
     private void recordFailure(ReconstructTaskMessage task, FailureReason reason) {
         notificationWriteGateway.recordFailure(

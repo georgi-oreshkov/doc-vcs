@@ -1,7 +1,7 @@
 # AGENTS.md – vcs-backend-worker
 
 ## Project Overview
-`vcs-backend-worker` is a **Spring Boot 4 headless async worker** in the `doc-vcs` platform. It has **no HTTP layer** — all I/O is through **Redis** (inbound jobs) and **MinIO/S3** (binary file reads and writes).
+`vcs-backend-worker` is a **Spring Boot 4 headless async worker** in the `doc-vcs` platform. It has **no HTTP layer** — inbound I/O is through a **Redis Stream** (task consumption), outbound through **MinIO/S3** (binary reads/writes) and **PostgreSQL** (notification inserts, version checksum updates).
 
 - **Runtime**: Java 25, Spring Boot 4.0.5
 - **Group / artifact**: `com.root` / `vcs-backend-worker`
@@ -12,11 +12,11 @@
 
 ## Core Processing Pipeline
 
-The worker handles two task types dispatched from Redis:
+The worker handles two task types consumed from a Redis Stream:
 
 **VERIFY_DIFF** — verifies and promotes an incoming diff:
 ```
-VerifyTaskMessage (Redis)
+VerifyTaskMessage (Redis Stream)
     │
     ▼
 Fetch base version bytes  ←── S3  latestVersionS3Key
@@ -30,13 +30,14 @@ SHA-256 hash result
     │
     ├─ matches expectedChecksum?
     │       YES → upload to permanent s3Key (strip .diff suffix)
-    │             → publish VerificationResultMessage(SUCCEEDED) to result channel
-    │       NO  → publish VerificationResultMessage(FAILED, CHECKSUM_MISMATCH)
+    │             → UPDATE versions SET checksum (DB)
+    │             → INSERT INTO notifications type=DIFF_VERIFIED (DB)
+    │       NO  → INSERT INTO notifications type=WORKER_TASK_FAILED (DB)
 ```
 
 **RECONSTRUCT_DOCUMENT** — reassembles a historical version for download:
 ```
-ReconstructTaskMessage (Redis)  ← carries targetVersionNumber
+ReconstructTaskMessage (Redis Stream)  ← carries targetVersionNumber
     │
     ▼
 Query DB (vcs_core.versions) → find closest SNAPSHOT ≤ targetVersionNumber
@@ -48,10 +49,10 @@ SHA-256 hash result → verify expectedChecksum
     │
     ▼
 Upload to tmp/{docId}/v{n}  →  generate presigned GET URL
-Publish ReconstructionResultMessage(SUCCEEDED, presignedDownloadUrl)
+INSERT INTO notifications type=DOCUMENT_RECONSTRUCTED (DB, includes presignedDownloadUrl)
 ```
 
-`vcs-backend` publishes jobs to `app.worker.redis.channel`; results are published back to `app.worker.redis.result-channel`. Both channels are consumed by `vcs-backend`.
+**No Redis results channel** — the worker writes outcomes directly to PostgreSQL. The backend learns about completed tasks via the `pg_notify` trigger on the `notifications` table (SSE delivery to users).
 
 ---
 
@@ -59,12 +60,17 @@ Publish ReconstructionResultMessage(SUCCEEDED, presignedDownloadUrl)
 
 ```
 vcs-frontend  →  vcs-backend (HTTP/REST, JWT via Keycloak)
-                     │  publishes job to Redis
+                     │  publishes job to Redis Stream (XADD)
                      ▼
               vcs-backend-worker  (this service)
-                     │  reads/writes                   reads (vcs_core.versions)
-                     ▼                                        ▼
-                 MinIO / S3                            PostgreSQL (vcs_db)
+                     │  reads/writes S3            reads/writes PostgreSQL
+                     ▼                                    ▼
+                 MinIO / S3                     PostgreSQL (vcs_db)
+                                                  ├─ vcs_core.versions (read + UPDATE checksum)
+                                                  └─ vcs_core.notifications (INSERT)
+                                                         │
+                                                         ▼ pg_notify trigger
+                                                  vcs-backend (PostgresNotificationListener → SSE)
 ```
 
 Sibling services live at `../vcs-backend` and `../vcs-frontend`. Infrastructure is declared in `../docker-compose.yml`.
@@ -75,11 +81,11 @@ Sibling services live at `../vcs-backend` and `../vcs-frontend`. Infrastructure 
 
 | Dependency | Purpose |
 |---|---|
-| `spring-boot-starter-data-redis` | Redis pub/sub listener (`RedisMessageListenerContainer`) |
+| `spring-boot-starter-data-redis` | Redis Stream consumer (`StreamMessageListenerContainer`) |
 | `software.amazon.awssdk:s3:2.32.26` | MinIO/S3 reads (versions + diffs) and writes (promoted versions, temp reconstructions) |
 | `io.github.java-diff-utils:java-diff-utils:4.12` | Applying unified diffs (`DiffApplicator`) |
-| `spring-boot-starter-jdbc` + `org.postgresql:postgresql` | Read-only JDBC queries against `vcs_core.versions` (`VersionQueryGateway`) |
-| `com.fasterxml.jackson.core:jackson-databind` | JSON serialization of Redis messages |
+| `spring-boot-starter-jdbc` + `org.postgresql:postgresql` | JDBC queries/writes against `vcs_core.versions` and `vcs_core.notifications` |
+| `com.fasterxml.jackson.core:jackson-databind` | JSON serialization of Redis messages and notification payloads |
 | `com.fasterxml.jackson.datatype:jackson-datatype-jsr310` | `Instant` serialization in `MessageMetadata` |
 | `lombok` | `@Data`, `@Builder`, `@SuperBuilder`, `@RequiredArgsConstructor` on all DTOs/models |
 | `spring-boot-starter-data-redis-test` | Embedded Redis for tests |
@@ -90,7 +96,7 @@ Sibling services live at `../vcs-backend` and `../vcs-frontend`. Infrastructure 
 ## Developer Workflows
 
 ```bash
-./gradlew bootRun    # requires Redis + MinIO running (see ../docker-compose.yml)
+./gradlew bootRun    # requires Redis + MinIO + PostgreSQL running (see ../docker-compose.yml)
 ./gradlew build      # compile + test
 ./gradlew test       # tests only; embedded Redis via data-redis-test starter
 ./gradlew bootJar    # build/libs/vcs-backend-worker-*.jar
@@ -109,15 +115,18 @@ docker run --rm \
   vcs-backend-worker:latest
 ```
 
-Start infrastructure: `cd .. && docker compose up minio redis -d`
+Start infrastructure: `cd .. && docker compose up minio redis postgres -d`
 
 ---
 
 ## Architecture Patterns
 
-### Redis Listener
-`WorkerTaskRedisListener` implements `MessageListener` and is registered via `RedisMessageListenerContainer` in `RedisSubscriberConfig`. The listener deserializes to `WorkerTaskMessage` (polymorphic via `taskType` field) and delegates to `WorkerTaskDispatcher`.
+### Redis Stream Consumer
+`WorkerTaskStreamListener` implements `StreamListener<String, MapRecord<String, String, String>>` and is registered via `StreamMessageListenerContainer` in `RedisSubscriberConfig`. The backend publishes tasks via `XADD`; this worker reads via `XREADGROUP` with consumer group `workers`.
 
+- On startup, `RedisSubscriberConfig` creates the consumer group (idempotent, handles `BUSYGROUP`).
+- Each stream record has a `"payload"` field containing the JSON-serialized `WorkerTaskMessage`.
+- After processing (success **or** failure), the listener ACKs the message via `XACK`. Only genuinely unprocessed messages (crash, OOM) remain unacked and are reclaimable via `XAUTOCLAIM`.
 - The listener is guarded by `@ConditionalOnProperty(prefix = "app.worker.redis", name = "listener-enabled", havingValue = "true", matchIfMissing = true)` — set `app.worker.redis.listener-enabled=false` in tests to skip registration.
 - `WorkerTaskDispatcher` uses a Java `switch` on the concrete subtype to route to the appropriate use case.
 
@@ -125,17 +134,25 @@ Start infrastructure: `cd .. && docker compose up minio redis -d`
 All inbound messages extend `WorkerTaskMessage` (abstract). Jackson resolves the subtype from the `taskType` field (see `@JsonTypeInfo` / `@JsonSubTypes`).
 
 **Inbound** (`shared/messaging/inbound/`):
-- `WorkerTaskMessage` — base: `metadata`, `taskType`, `docId`, `versionId`, `expectedChecksum`
+- `WorkerTaskMessage` — base: `metadata`, `taskType`, `docId`, `versionId`, `expectedChecksum`, `recipientId`
 - `VerifyTaskMessage` — adds: `latestVersionS3Key`, `diffS3Key`
 - `ReconstructTaskMessage` — adds: `targetVersionNumber`
 
-**Outbound** (`shared/messaging/outbound/`):
-- `VerificationResultMessage` — `metadata`, `docId`, `versionId`, `status`, `failureReason`, `actualChecksum`
-- `ReconstructionResultMessage` — `metadata`, `docId`, `versionId`, `status`, `failureReason`, `presignedDownloadUrl`
-- `ProcessingStatus`: `SUCCEEDED` | `FAILED`
-- `FailureReason`: `CHECKSUM_MISMATCH` | `DIFF_APPLY_FAILED` | `SOURCE_NOT_FOUND` | `INVALID_MESSAGE` | `STORAGE_ERROR` | `INTERNAL_ERROR`
+`MessageMetadata` carries `correlationId` (UUID), `emittedAt` (Instant), `producer` (string), `schemaVersion` (default 1).
 
-`MessageMetadata` carries `correlationId` (UUID), `emittedAt` (Instant), `producer` (string), `schemaVersion` (default 1). `WorkerResultPublisher.buildMetadata(task)` propagates the inbound `correlationId` for end-to-end traceability.
+`FailureReason` enum (`shared/messaging/`): `CHECKSUM_MISMATCH` | `DIFF_APPLY_FAILED` | `SOURCE_NOT_FOUND` | `INVALID_MESSAGE` | `STORAGE_ERROR` | `INTERNAL_ERROR` — used in notification payloads.
+
+**No outbound messages** — the worker writes results directly to PostgreSQL.
+
+### Task Outcome Recording (PostgreSQL)
+`NotificationWriteGateway` (`shared/db/`) writes task outcomes directly to the `vcs_core.notifications` table using JDBC. The PostgreSQL `AFTER INSERT` trigger on `notifications` fires `pg_notify('vcs_notification_inserted', ...)`, which the backend's `PostgresNotificationListener` picks up and pushes via SSE. This is the uniform delivery path for all notification sources.
+
+Three outcome methods (each `@Transactional`):
+- `recordVerificationSuccess(recipientId, docId, versionId, checksum)` — atomically UPDATEs `versions.checksum` and INSERTs notification with type `DIFF_VERIFIED`
+- `recordReconstructionSuccess(recipientId, docId, versionId, presignedDownloadUrl)` — INSERTs notification with type `DOCUMENT_RECONSTRUCTED`
+- `recordFailure(recipientId, docId, versionId, taskType, failureReason)` — INSERTs notification with type `WORKER_TASK_FAILED`
+
+Notification payloads are JSONB containing `docId`, `versionId`, and task-specific fields.
 
 ### S3 / MinIO Client
 `S3Config` (in `shared/config/`) defines `S3Client` and `S3Presigner` beans, both with `forcePathStyle(true)` — **required for MinIO**. All S3 operations go through `S3DocumentStorage` (`shared/s3/`):
@@ -147,12 +164,14 @@ Config prefix: `app.s3.*` (endpoint, bucket, region, access-key, secret-key, pre
 S3 key convention: `documents/{docId}/v{versionNumber}` for permanent versions; `documents/{docId}/v{n+1}.diff` for temp diff objects; `tmp/{docId}/v{n}` for reconstructed temporary downloads.
 
 ### Database
-`VersionQueryGateway` (`shared/db/`) is a **read-only** JDBC repository using `JdbcClient`. It queries `vcs_core.versions` (owned by `vcs-backend`'s Flyway migrations). The worker never writes to the DB.
+`VersionQueryGateway` (`shared/db/`) is a JDBC repository using `JdbcClient`. It queries `vcs_core.versions` (owned by `vcs-backend`'s Flyway migrations).
 
 Key methods:
 - `findById(versionId)` — fetch single version row
 - `findLastSnapshotBefore(docId, targetVersionNumber)` — closest `SNAPSHOT` ≤ target
 - `findDiffVersionsBetween(docId, afterVersionNumber, upToVersionNumber)` — ordered `DIFF` rows to apply
+
+`NotificationWriteGateway` (`shared/db/`) writes to `vcs_core.notifications` and updates `vcs_core.versions.checksum`. Schema migrations are owned by `vcs-backend` (Flyway). The worker never creates tables or alters schema.
 
 `VersionRow` (Lombok `@Data @Builder`) is the JDBC projection: `id`, `docId`, `versionNumber`, `status`, `storageType`, `checksum`, `s3Key`. Not a JPA entity.
 
@@ -180,15 +199,16 @@ spring.datasource.username=${DB_USER:app_user}
 spring.datasource.password=${DB_PASSWORD:secret}
 spring.datasource.driver-class-name=org.postgresql.Driver
 
-app.worker.redis.channel=${WORKER_CHANNEL:vcs.diff.jobs}
-app.worker.redis.result-channel=${WORKER_RESULT_CHANNEL:vcs.diff.results}
+app.worker.redis.stream=${WORKER_STREAM:vcs.diff.jobs}
+app.worker.redis.consumer-group=${WORKER_CONSUMER_GROUP:workers}
+app.worker.redis.consumer-name=${WORKER_CONSUMER_NAME:${random.uuid}}
 app.worker.redis.listener-enabled=${WORKER_LISTENER_ENABLED:true}
 ```
 
 ### GraalVM Native Image
 The `org.graalvm.buildtools.native` plugin (`0.10.4`) is applied. Spring Boot's AOT processor runs automatically before native compilation and handles most reflection/proxy registration. Three project-specific concerns require manual attention:
 
-1. **Jackson polymorphic types** — `@JsonSubTypes` on `WorkerTaskMessage` is detected by Spring AOT, but nested types (`MessageMetadata`, `VerificationResultMessage`, `ReconstructionResultMessage`) are not. All message DTOs and enums are registered in `WorkerRuntimeHints`.
+1. **Jackson polymorphic types** — `@JsonSubTypes` on `WorkerTaskMessage` is detected by Spring AOT, but nested types (`MessageMetadata`) are not. All inbound message DTOs and enums are registered in `WorkerRuntimeHints`.
 2. **JDBC `DataClassRowMapper`** — `JdbcClient.query(VersionRow.class)` is a dynamic call site invisible to AOT static analysis. `VersionRow` is registered explicitly.
 3. **AWS SDK HTTP client** — `software.amazon.awssdk:url-connection-client` is declared explicitly to pin the native-image-friendly sync HTTP transport (Java's built-in `HttpURLConnection`) and avoid Netty being selected, which pulls in additional reflection requirements.
 
@@ -225,21 +245,21 @@ Use on all model/DTO classes. Avoid manual getters/setters/constructors. `@Requi
 | `src/main/resources/application.properties` | Runtime configuration (fully populated) |
 | `src/main/java/com/root/vcsbackendworker/VcsBackendWorkerApplication.java` | Spring Boot entry point |
 | `src/test/java/com/root/vcsbackendworker/VcsBackendWorkerApplicationTests.java` | Baseline context-loads test (sets `listener-enabled=false`) |
-| `shared/config/RedisSubscriberConfig.java` | Registers `RedisMessageListenerContainer` + `ChannelTopic` |
+| `shared/config/RedisSubscriberConfig.java` | Registers `StreamMessageListenerContainer` + consumer group |
 | `shared/config/WorkerRedisProperties.java` | `@ConfigurationProperties("app.worker.redis")` record |
 | `shared/config/S3Config.java` | `S3Client` + `S3Presigner` beans (forcePathStyle for MinIO) |
 | `shared/config/S3Properties.java` | `@ConfigurationProperties("app.s3")` record |
 | `shared/config/JacksonConfig.java` | `ObjectMapper` bean with `JavaTimeModule` |
 | `shared/config/WorkerRuntimeHints.java` | GraalVM native-image reflection hints (message DTOs + `VersionRow`) |
-| `shared/messaging/WorkerTaskRedisListener.java` | Redis `MessageListener` — deserializes and dispatches tasks |
+| `shared/messaging/WorkerTaskStreamListener.java` | Redis Stream `StreamListener` — deserializes, dispatches, and ACKs |
 | `shared/messaging/WorkerTaskDispatcher.java` | Routes `WorkerTaskMessage` subtypes to use cases via `switch` |
-| `shared/messaging/WorkerResultPublisher.java` | Publishes result messages to result-channel; builds `MessageMetadata` |
+| `shared/messaging/FailureReason.java` | Enum of failure reasons for notification payloads |
+| `shared/messaging/MessageMetadata.java` | Inbound message metadata (correlationId, emittedAt, producer) |
 | `shared/messaging/inbound/WorkerTaskMessage.java` | Polymorphic base with `@JsonTypeInfo`/`@JsonSubTypes` |
 | `shared/messaging/inbound/VerifyTaskMessage.java` | Adds `latestVersionS3Key`, `diffS3Key` |
 | `shared/messaging/inbound/ReconstructTaskMessage.java` | Adds `targetVersionNumber` |
-| `shared/messaging/outbound/VerificationResultMessage.java` | Verify result DTO |
-| `shared/messaging/outbound/ReconstructionResultMessage.java` | Reconstruct result DTO (includes `presignedDownloadUrl`) |
-| `shared/db/VersionQueryGateway.java` | Read-only JDBC queries against `vcs_core.versions` |
+| `shared/db/NotificationWriteGateway.java` | Writes task outcomes to `vcs_core.notifications` + updates `versions.checksum` |
+| `shared/db/VersionQueryGateway.java` | JDBC queries against `vcs_core.versions` |
 | `shared/db/VersionRow.java` | JDBC projection (not a JPA entity) |
 | `shared/s3/S3DocumentStorage.java` | `fetchBytes`, `uploadBytes`, `generatePresignedDownloadUrl` |
 | `shared/diff/DiffApplicator.java` | Applies unified diffs via `java-diff-utils` |
@@ -254,4 +274,6 @@ Use on all model/DTO classes. Avoid manual getters/setters/constructors. `@Requi
 ## Notes
 - Do **not** add `spring-boot-starter-web` — this service has no HTTP layer.
 - Java 25 toolchain is enforced; do not downgrade.
-- The worker only **reads** from PostgreSQL (`vcs_core.versions`); all schema migrations are owned by `vcs-backend` (Flyway). Never write to the DB from this service.
+- The worker **reads** from `vcs_core.versions` and **writes** to `vcs_core.notifications` + updates `versions.checksum`. All schema migrations are owned by `vcs-backend` (Flyway). Never create tables or alter schema from this service.
+- Redis transport is **Streams** (XREADGROUP), not Pub/Sub. The backend publishes via XADD; do not use `RedisMessageListenerContainer` or `ChannelTopic`.
+- All tasks are ACKed after processing (success or failure). Unacked messages indicate crashes and are reclaimable via XAUTOCLAIM.

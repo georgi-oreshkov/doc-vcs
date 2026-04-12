@@ -1,4 +1,4 @@
-package com.root.vcsbackendworker.reconstructTask.application;
+package com.root.vcsbackendworker.shared.reconstruct;
 
 public class ReconstructionException extends RuntimeException {
 

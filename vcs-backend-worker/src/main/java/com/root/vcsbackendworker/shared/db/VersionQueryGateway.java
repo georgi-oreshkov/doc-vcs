@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -18,6 +19,7 @@ import java.util.UUID;
 @Slf4j
 @Repository
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class VersionQueryGateway {
 
     private final JdbcClient jdbcClient;
@@ -79,6 +81,7 @@ public class VersionQueryGateway {
     /**
      * Fetches a single version by its ID.
      */
+
     public Optional<VersionRow> findById(UUID versionId) {
         return jdbcClient.sql("""
                 SELECT id, doc_id, version_number, status, storage_type, checksum, s3_key
@@ -86,6 +89,21 @@ public class VersionQueryGateway {
                 WHERE id = :versionId
                 """)
                 .param("versionId", versionId)
+                .query(VersionRow.class)
+                .optional();
+    }
+
+    /**
+     * Fetches a single version by its doc id and version number.
+     */
+    public Optional<VersionRow> findByDocIdAndVersionNumber(UUID docId, Integer versionNumber) {
+        return jdbcClient.sql("""
+                SELECT id, doc_id, version_number, status, storage_type, checksum, s3_key
+                FROM vcs_core.versions
+                WHERE doc_id = :docId AND version_number = :versionNumber
+                """)
+                .param("docId", docId)
+                .param("versionNumber", versionNumber)
                 .query(VersionRow.class)
                 .optional();
     }

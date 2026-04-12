@@ -1,5 +1,6 @@
 package com.root.vcsbackendworker.verify.domain;
 
+import com.root.vcsbackendworker.shared.verify.ChecksumVerifier;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;

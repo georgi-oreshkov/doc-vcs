@@ -6,6 +6,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
@@ -52,6 +54,22 @@ public class S3DocumentStorage {
 
         s3Client.putObject(request, RequestBody.fromBytes(bytes));
         log.info("Uploaded {} bytes to S3 key={}", bytes.length, s3Key);
+    }
+
+    public void moveObject(String oldS3Key, String newS3key) {
+        log.debug("Moving {} to S3: bucket={}, key={}", oldS3Key, s3Properties.bucket(), newS3key);
+        CopyObjectRequest request = CopyObjectRequest.builder()
+                .sourceBucket(s3Properties.bucket())
+                .sourceKey(oldS3Key)
+                .destinationBucket(s3Properties.bucket())
+                .destinationKey(newS3key)
+                .build();
+        s3Client.copyObject(request);
+        DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
+                .bucket(s3Properties.bucket())
+                .key(oldS3Key)
+                .build();
+        s3Client.deleteObject(deleteRequest);
     }
 
     /**

@@ -1,10 +1,10 @@
 package com.root.vcsbackendworker.shared.messaging;
 
-import com.root.vcsbackendworker.reconstruct.application.ReconstructDocumentUseCase;
+import com.root.vcsbackendworker.reconstructTask.application.ReconstructDocumentUseCase;
 import com.root.vcsbackendworker.shared.messaging.inbound.ReconstructTaskMessage;
 import com.root.vcsbackendworker.shared.messaging.inbound.VerifyTaskMessage;
 import com.root.vcsbackendworker.shared.messaging.inbound.WorkerTaskMessage;
-import com.root.vcsbackendworker.verify.application.VerifyDiffUseCase;
+import com.root.vcsbackendworker.verifyTask.application.VerifyDiffUseCase;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
