@@ -47,7 +47,7 @@ dependencies {
     implementation("org.mapstruct:mapstruct:1.6.3")
     implementation("org.springframework.retry:spring-retry:2.0.11")
     compileOnly("org.projectlombok:lombok")
-    runtimeOnly("org.postgresql:postgresql")
+    implementation("org.postgresql:postgresql")  // compile-time for PostgresNotificationListener (PGConnection, PGNotification)
     // Annotation processor order matters: lombok → binding → mapstruct
     annotationProcessor("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok-mapstruct-binding:0.2.0")

@@ -54,11 +54,10 @@ EXPOSE 8080
 #   KC_ISSUER_URI            (must match the "iss" claim in JWTs)
 #   KC_CLIENT_ID, KC_REDIRECT_URI
 #   REDIS_HOST, REDIS_PORT
-#   WORKER_CHANNEL, WORKER_RESULT_CHANNEL
+#   WORKER_STREAM
 #   S3_ENDPOINT, S3_BUCKET, S3_REGION, S3_ACCESS_KEY, S3_SECRET_KEY
 #   CORS_ALLOWED_ORIGINS
 ENTRYPOINT ["java", \
   "-XX:+UseContainerSupport", \
   "-XX:MaxRAMPercentage=75.0", \
   "-jar", "app.jar"]
-

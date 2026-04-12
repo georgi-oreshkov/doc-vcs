@@ -91,34 +91,43 @@ public interface DocumentMapper { ... }
 
 ---
 
-## Notifications (Event-Driven)
+## Notifications (Event-Driven + LISTEN/NOTIFY)
 
-Any service publishes a `NotificationEvent` via `ApplicationEventPublisher` — no import of the notification module needed:
+**Persistence:** Any service publishes a `NotificationEvent` via `ApplicationEventPublisher` — no import of the notification module needed:
 
 ```java
 events.publishEvent(new NotificationEvent(this, recipientId, "VERSION_APPROVED", payload));
 ```
 
-`NotificationService` (`@EventListener`) persists to DB and pushes live via `SseEmitterRegistry`.
+`NotificationService` (`@EventListener`) persists to DB. Worker-originated notifications are inserted directly by the worker (no `NotificationEvent` needed).
+
+**SSE delivery:** A PostgreSQL `AFTER INSERT` trigger on `notifications` fires `pg_notify('vcs_notification_inserted', {...})` after each transaction commits. `PostgresNotificationListener` maintains a dedicated (non-pooled) `LISTEN` connection on a virtual thread and dispatches to `SseEmitterRegistry.send()`. This is the **single, uniform SSE delivery path** for all notification sources (backend services, worker, direct SQL).
 
 ---
 
-## Redis Pub/Sub — Worker Communication
+## Redis Streams — Worker Communication
 
-The backend communicates with the `vcs-backend-worker` service over Redis Pub/Sub:
+The backend communicates with the `vcs-backend-worker` service via a **one-way Redis Stream** for task dispatch. Results flow back through PostgreSQL, not Redis.
 
-1. **Publish** — `DiffTaskPublisher` (in `shared/redis/`) serializes `VerifyTaskMessage` or `ReconstructTaskMessage` to JSON and publishes to the **jobs channel** (`vcs.diff.jobs`).
-2. **Subscribe** — `DiffResultListener` (in `shared/redis/`) receives results on the **results channel** (`vcs.diff.results`), deserializes, and fires a `DiffResultEvent` (Spring `ApplicationEvent`).
-3. **Handle** — `DiffResultHandler` (in `version/service/`) listens for `DiffResultEvent`, updates the version entity as needed, and pushes an SSE notification via `NotificationEvent`.
+1. **Publish** — `DiffTaskPublisher` (in `shared/redis/`) serializes `VerifyTaskMessage` or `ReconstructTaskMessage` to JSON and appends to the **jobs stream** (`vcs.diff.jobs`) via `XADD`. Each message includes `recipientId` (the user to notify) so no correlation cache is needed.
+2. **Consumer group** — On startup, `RedisConfig` creates the `workers` consumer group on the stream (idempotent). The worker reads with `XREADGROUP GROUP workers <consumer-name>`, guaranteeing each task is delivered to **exactly one** worker instance — no duplicate processing even with horizontal scaling. Failed/crashed messages are reclaimable via `XAUTOCLAIM`.
+3. **Worker processes the task** — the worker performs S3 operations (verify diff / reconstruct document) and writes outcomes **directly to PostgreSQL**:
+   - **Verification success** → `UPDATE versions SET checksum = :actual WHERE id = :versionId AND checksum IS NULL` + `INSERT INTO notifications`.
+   - **Reconstruction success** → `INSERT INTO notifications` with a `presignedDownloadUrl` in the payload.
+   - **Failure** → `INSERT INTO notifications` with failure reason.
+4. **SSE delivery** — a PostgreSQL `AFTER INSERT` trigger on `notifications` fires `pg_notify('vcs_notification_inserted', ...)`. `PostgresNotificationListener` (in `notification/sse/`) receives it on a dedicated `LISTEN` connection and calls `SseEmitterRegistry.send()`. Only the backend instance holding the user's SSE connection actually pushes bytes; others no-op.
 
-Message DTOs live in `shared/redis/message/` and mirror the worker's contract:
-- **Inbound** (backend → worker): `WorkerTaskMessage` (abstract, polymorphic via `taskType`), `VerifyTaskMessage`, `ReconstructTaskMessage`
-- **Outbound** (worker → backend): `VerificationResultMessage`, `ReconstructionResultMessage`
-- **Shared**: `MessageMetadata`, `ProcessingStatus`, `FailureReason`, `WorkerTaskType`
+This architecture means:
+- **No Redis results channel** — the worker's contract is two SQL statements, not a message format.
+- **No correlation cache** — `recipientId` travels with the task message.
+- **Exactly-once task delivery** — Redis Streams consumer groups guarantee each task goes to one worker (unlike Pub/Sub which broadcasts to all).
+- **Uniform SSE path** — both worker-originated notifications (inserted by the worker) and backend-originated notifications (e.g., `VERSION_APPROVED`, inserted by `NotificationService`) follow the same `pg_notify → PostgresNotificationListener → SseEmitterRegistry` delivery path.
 
-A **correlation cache** (`ConcurrentHashMap<UUID, UUID>`) in `DiffTaskPublisher` maps `correlationId → userId` so the result listener can determine which user to notify via SSE.
+Message DTOs live in `shared/redis/message/` and mirror the worker's inbound contract:
+- `WorkerTaskMessage` (abstract, polymorphic via `taskType`), `VerifyTaskMessage`, `ReconstructTaskMessage`
+- `MessageMetadata`, `WorkerTaskType`
 
-Config: `app.redis.diff-jobs-channel` (env: `WORKER_CHANNEL`), `app.redis.diff-results-channel` (env: `WORKER_RESULT_CHANNEL`).
+Config: `app.redis.diff-jobs-stream` (env: `WORKER_STREAM`).
 
 **Important:** Uses Jackson 3 (`tools.jackson.databind.json.JsonMapper`), not Jackson 2 (`com.fasterxml.jackson.databind.ObjectMapper`). Spring Boot 4 auto-configures `JsonMapper`.
 
@@ -152,8 +161,7 @@ Config: `app.redis.diff-jobs-channel` (env: `WORKER_CHANNEL`), `app.redis.diff-r
 | `S3_ENDPOINT` / `S3_BUCKET` | `http://localhost:9000/vcs-documents` | MinIO/S3 |
 | `S3_ACCESS_KEY` / `S3_SECRET_KEY` | `minioadmin/minioadmin` | MinIO credentials |
 | `REDIS_HOST` / `REDIS_PORT` | `localhost/16379` | Redis |
-| `WORKER_CHANNEL` | `vcs.diff.jobs` | Redis channel: backend → worker tasks |
-| `WORKER_RESULT_CHANNEL` | `vcs.diff.results` | Redis channel: worker → backend results |
+| `WORKER_STREAM` | `vcs.diff.jobs` | Redis Stream: backend → worker tasks |
 
 ---
 
@@ -167,10 +175,8 @@ Config: `app.redis.diff-jobs-channel` (env: `WORKER_CHANNEL`), `app.redis.diff-r
 | `src/main/java/.../shared/config/SecurityConfig.java` | Filter chain, JWT converter, permit-all rules |
 | `src/main/java/.../shared/security/OrgRoleEvaluator.java` | SpEL security evaluator used in `@PreAuthorize` |
 | `src/main/java/.../shared/mapper/MapStructConfig.java` | Global MapStruct config (read the Javadoc) |
-| `src/main/java/.../shared/redis/DiffTaskPublisher.java` | Publishes verify/reconstruct tasks to worker via Redis |
-| `src/main/java/.../shared/redis/DiffResultListener.java` | Subscribes to worker results channel, fires DiffResultEvent |
-| `src/main/java/.../shared/redis/DiffResultEvent.java` | Cross-module event for worker results |
-| `src/main/java/.../shared/redis/message/` | Message DTOs mirroring the worker's contract |
-| `src/main/java/.../version/service/DiffResultHandler.java` | Handles worker results, updates versions, pushes SSE |
+| `src/main/java/.../shared/redis/DiffTaskPublisher.java` | Publishes verify/reconstruct tasks to worker via Redis (fire-and-forget) |
+| `src/main/java/.../shared/redis/message/` | Task message DTOs mirroring the worker's inbound contract |
+| `src/main/java/.../notification/sse/PostgresNotificationListener.java` | Dedicated LISTEN connection; dispatches pg_notify events to SseEmitterRegistry |
 | `src/main/java/.../notification/domain/NotificationEvent.java` | Cross-module notification contract |
 

@@ -48,7 +48,7 @@ public class VersionService {
     private final VersionMapper versionMapper;
     /** Used for fine-grained role checks inside approve/reject/rollback. */
     private final OrgRoleLookup orgRoleLookup;
-    /** Publishes verify / reconstruct tasks to the worker via Redis. */
+    /** Publishes worker tasks (verify / reconstruct) to Redis. */
     private final DiffTaskPublisher diffTaskPublisher;
 
     @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
@@ -74,16 +74,16 @@ public class VersionService {
             String diffS3Key = s3Key + ".diff";
             String previousS3Key = findPreviousVersionS3Key(docId, nextNumber);
             if (previousS3Key != null && req.getChecksum() != null) {
-                diffTaskPublisher.publishVerifyTask(
+                diffTaskPublisher.publish(
                         VerifyTaskMessage.builder()
                                 .taskType(WorkerTaskType.VERIFY_DIFF)
                                 .docId(docId)
                                 .versionId(version.getId())
+                                .recipientId(callerId)
                                 .expectedChecksum(req.getChecksum())
                                 .latestVersionS3Key(previousS3Key)
                                 .diffS3Key(diffS3Key)
-                                .build(),
-                        callerId);
+                                .build());
             }
         }
 
@@ -167,15 +167,15 @@ public class VersionService {
     public void requestReconstruct(UUID docId, UUID versionId, UUID callerId) {
         VersionEntity version = resolveAndValidate(docId, versionId);
 
-        diffTaskPublisher.publishReconstructTask(
+        diffTaskPublisher.publish(
                 ReconstructTaskMessage.builder()
                         .taskType(WorkerTaskType.RECONSTRUCT_DOCUMENT)
                         .docId(docId)
                         .versionId(versionId)
+                        .recipientId(callerId)
                         .expectedChecksum(version.getChecksum())
                         .targetVersionNumber(version.getVersionNumber())
-                        .build(),
-                callerId);
+                        .build());
     }
 
     /**
@@ -195,15 +195,15 @@ public class VersionService {
         VersionEntity version = resolveAndValidate(docId, versionId);
 
         if (version.getStorageType() == StorageType.DIFF) {
-            diffTaskPublisher.publishReconstructTask(
+            diffTaskPublisher.publish(
                     ReconstructTaskMessage.builder()
                             .taskType(WorkerTaskType.RECONSTRUCT_DOCUMENT)
                             .docId(docId)
                             .versionId(versionId)
+                            .recipientId(callerId)
                             .expectedChecksum(version.getChecksum())
                             .targetVersionNumber(version.getVersionNumber())
-                            .build(),
-                    callerId);
+                            .build());
         }
 
         return new GetVersionDownloadUrl200Response()
@@ -276,15 +276,15 @@ public class VersionService {
      */
     private String presignOrReconstruct(UUID docId, VersionEntity version, UUID callerId) {
         if (version.getStorageType() == StorageType.DIFF) {
-            diffTaskPublisher.publishReconstructTask(
+            diffTaskPublisher.publish(
                     ReconstructTaskMessage.builder()
                             .taskType(WorkerTaskType.RECONSTRUCT_DOCUMENT)
                             .docId(docId)
                             .versionId(version.getId())
+                            .recipientId(callerId)
                             .expectedChecksum(version.getChecksum())
                             .targetVersionNumber(version.getVersionNumber())
-                            .build(),
-                    callerId);
+                            .build());
         }
         return s3PresignService.generateDownloadUrl(version.getS3Key());
     }

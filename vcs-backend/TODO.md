@@ -64,30 +64,30 @@ Full diff / download / reconstruct flow wired up:
 
 ### ~~6. RedisConfig is an empty stub~~ DONE
 **Fixed:** `shared/config/RedisConfig.java`, `shared/config/RedisProperties.java`,
-`shared/redis/DiffTaskPublisher.java`, `shared/redis/DiffResultListener.java`,
-`shared/redis/DiffResultEvent.java`, `shared/redis/message/*`,
-`version/service/DiffResultHandler.java`, `version/service/VersionService.java`,
-`version/persistence/VersionRepository.java`, `application.properties`
+`shared/redis/DiffTaskPublisher.java`, `shared/redis/message/*`,
+`version/service/VersionService.java`, `notification/service/NotificationService.java`,
+`notification/sse/PostgresNotificationListener.java`, `application.properties`
 
-Full Redis Pub/Sub integration with the `vcs-backend-worker`:
+One-way Redis Pub/Sub task dispatch + worker-writes-to-DB architecture:
 - **Publish** tasks (`VERIFY_DIFF`, `RECONSTRUCT_DOCUMENT`) to channel `vcs.diff.jobs`
-- **Subscribe** to results on channel `vcs.diff.results` via `RedisMessageListenerContainer`
-- **Message DTOs** in `shared/redis/message/` mirror the worker's contract exactly
-  (polymorphic `WorkerTaskMessage` with Jackson `@JsonTypeInfo`, result messages for
-  verification and reconstruction)
-- **Correlation cache** in `DiffTaskPublisher` maps `correlationId → userId` so the
-  result listener knows which user to notify via SSE
-- **`DiffResultEvent`** (Spring `ApplicationEvent`) bridges the `shared` Redis listener
-  to the `version` module's `DiffResultHandler` without violating Modulith boundaries
-- **`DiffResultHandler`** updates version checksum on successful verification, pushes
-  SSE notifications (`DIFF_VERIFIED`, `DIFF_VERIFICATION_FAILED`,
-  `DOCUMENT_RECONSTRUCTED`, `DOCUMENT_RECONSTRUCTION_FAILED`) via the existing
-  `NotificationEvent` → `NotificationService` → `SseEmitterRegistry` pipeline
-- `VersionService.createVersion()` now publishes a `VERIFY_DIFF` task when a non-draft
-  version is submitted with a checksum
-- New `VersionService.requestReconstruct()` method publishes a `RECONSTRUCT_DOCUMENT` task
-- Channel names configurable via `app.redis.diff-jobs-channel` / `app.redis.diff-results-channel`
-  (env: `WORKER_CHANNEL` / `WORKER_RESULT_CHANNEL`), matching the worker's defaults
+  via `DiffTaskPublisher.publish()` — fire-and-forget, single generic method
+- **No results channel** — the worker writes outcomes directly to PostgreSQL:
+  `UPDATE versions SET checksum` on verification success, `INSERT INTO notifications`
+  for all outcomes (success + failure)
+- **No correlation cache** — `recipientId` travels on the task message itself
+  (set by the backend at publish time from `callerId`)
+- **Message DTOs** in `shared/redis/message/` mirror the worker's inbound contract
+  (polymorphic `WorkerTaskMessage` with Jackson `@JsonTypeInfo`)
+- **SSE delivery** — a PostgreSQL `AFTER INSERT` trigger on `notifications` fires
+  `pg_notify('vcs_notification_inserted', ...)`. `PostgresNotificationListener`
+  (dedicated non-pooled LISTEN connection on a virtual thread) dispatches to
+  `SseEmitterRegistry.send()`. This is the uniform SSE path for all notification
+  sources (backend services, worker, direct SQL)
+- **Deleted** (no longer needed): `DiffResultListener`, `DiffResultEvent`,
+  `DiffResultHandler`, `VerificationResultMessage`, `ReconstructionResultMessage`,
+  `ProcessingStatus`, `FailureReason`
+- Stream key configurable via `app.redis.diff-jobs-stream`
+  (env: `WORKER_STREAM`), matching the worker's defaults
 
 ### ~~7. SSE: only one emitter per user (multi-tab broken)~~ DONE
 **Fixed:** `notification/sse/SseEmitterRegistry.java`, `notification/web/NotificationController.java`
@@ -228,4 +228,3 @@ derived delete is explicit and safe regardless of whether a surrounding transact
 **Fixed:** `organization/service/OrganizationService.java`
 Added `@PreAuthorize("isAuthenticated()")` to `listOrganizations` for consistency
 with every other service method.
-
