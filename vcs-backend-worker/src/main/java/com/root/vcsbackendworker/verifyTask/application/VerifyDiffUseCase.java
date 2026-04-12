@@ -1,14 +1,12 @@
-package com.root.vcsbackendworker.verify.application;
+package com.root.vcsbackendworker.verifyTask.application;
 
+import com.root.vcsbackendworker.shared.db.NotificationWriteGateway;
 import com.root.vcsbackendworker.shared.diff.DiffApplicationException;
 import com.root.vcsbackendworker.shared.diff.DiffApplicator;
-import com.root.vcsbackendworker.shared.messaging.WorkerResultPublisher;
+import com.root.vcsbackendworker.shared.messaging.FailureReason;
 import com.root.vcsbackendworker.shared.messaging.inbound.VerifyTaskMessage;
-import com.root.vcsbackendworker.shared.messaging.outbound.FailureReason;
-import com.root.vcsbackendworker.shared.messaging.outbound.ProcessingStatus;
-import com.root.vcsbackendworker.shared.messaging.outbound.VerificationResultMessage;
 import com.root.vcsbackendworker.shared.s3.S3DocumentStorage;
-import com.root.vcsbackendworker.verify.domain.ChecksumVerifier;
+import com.root.vcsbackendworker.shared.verify.ChecksumVerifier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,11 +17,10 @@ import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 @RequiredArgsConstructor
 public class VerifyDiffUseCase {
 
-
     private final S3DocumentStorage s3;
     private final DiffApplicator diffApplicator;
     private final ChecksumVerifier checksumVerifier;
-    private final WorkerResultPublisher resultPublisher;
+    private final NotificationWriteGateway notificationWriteGateway;
 
     public void handle(VerifyTaskMessage task) {
         log.info("Verify task started: docId={}, versionId={}", task.getDocId(), task.getVersionId());
@@ -34,11 +31,11 @@ public class VerifyDiffUseCase {
             baseBytes = s3.fetchBytes(task.getLatestVersionS3Key());
         } catch (NoSuchKeyException e) {
             log.error("Base version not found in S3: key={}", task.getLatestVersionS3Key(), e);
-            resultPublisher.publish(failureResult(task, FailureReason.SOURCE_NOT_FOUND, null));
+            recordFailure(task, FailureReason.SOURCE_NOT_FOUND);
             return;
         } catch (Exception e) {
             log.error("Failed to fetch base version from S3: key={}", task.getLatestVersionS3Key(), e);
-            resultPublisher.publish(failureResult(task, FailureReason.STORAGE_ERROR, null));
+            recordFailure(task, FailureReason.STORAGE_ERROR);
             return;
         }
 
@@ -48,11 +45,11 @@ public class VerifyDiffUseCase {
             diffBytes = s3.fetchBytes(task.getDiffS3Key());
         } catch (NoSuchKeyException e) {
             log.error("Diff not found in S3: key={}", task.getDiffS3Key(), e);
-            resultPublisher.publish(failureResult(task, FailureReason.SOURCE_NOT_FOUND, null));
+            recordFailure(task, FailureReason.SOURCE_NOT_FOUND);
             return;
         } catch (Exception e) {
             log.error("Failed to fetch diff from S3: key={}", task.getDiffS3Key(), e);
-            resultPublisher.publish(failureResult(task, FailureReason.STORAGE_ERROR, null));
+            recordFailure(task, FailureReason.STORAGE_ERROR);
             return;
         }
 
@@ -62,32 +59,34 @@ public class VerifyDiffUseCase {
             resultBytes = diffApplicator.apply(baseBytes, diffBytes);
         } catch (DiffApplicationException e) {
             log.error("Diff application failed: docId={}, versionId={}", task.getDocId(), task.getVersionId(), e);
-            resultPublisher.publish(failureResult(task, FailureReason.DIFF_APPLY_FAILED, null));
+            recordFailure(task, FailureReason.DIFF_APPLY_FAILED);
             return;
         }
 
-        // 4. Verify checksum — compute once, compare directly (avoids hashing twice)
-        String actualChecksum = checksumVerifier.sha256Hex(resultBytes);
-        if (!actualChecksum.equalsIgnoreCase(task.getExpectedChecksum())) {
-            log.warn("Checksum mismatch: docId={}, versionId={}, expected={}, actual={}",
-                    task.getDocId(), task.getVersionId(), task.getExpectedChecksum(), actualChecksum);
-            resultPublisher.publish(failureResult(task, FailureReason.CHECKSUM_MISMATCH, actualChecksum));
+        // 4. Verify checksum
+        if (!checksumVerifier.matches(resultBytes, task.getExpectedChecksum())) {
+            log.warn("Checksum mismatch: docId={}, versionId={}, expected={}",
+                    task.getDocId(), task.getVersionId(), task.getExpectedChecksum());
+            recordFailure(task, FailureReason.CHECKSUM_MISMATCH);
             return;
         }
 
         // 5. Upload to permanent S3 location (strip .diff suffix from the diff key)
         String permanentKey = toPermanentKey(task.getDiffS3Key());
         try {
-            s3.uploadBytes(permanentKey, resultBytes);
+            s3.moveObject(task.getDiffS3Key(), permanentKey);
         } catch (Exception e) {
-            log.error("Failed to upload result to S3: key={}", permanentKey, e);
-            resultPublisher.publish(failureResult(task, FailureReason.STORAGE_ERROR, actualChecksum));
+            log.error("Failed to move diff to S3: key={}", permanentKey, e);
+            recordFailure(task, FailureReason.STORAGE_ERROR);
             return;
         }
 
-        // 6. Publish success result
-        log.info("Verify task succeeded: docId={}, versionId={}, permanentKey={}", task.getDocId(), task.getVersionId(), permanentKey);
-        resultPublisher.publish(successResult(task, actualChecksum));
+        // 6. Update version checksum + insert notification (single DB transaction)
+        notificationWriteGateway.recordVerificationSuccess(
+                task.getRecipientId(), task.getDocId(), task.getVersionId(), task.getExpectedChecksum());
+
+        log.info("Verify task succeeded: docId={}, versionId={}, permanentKey={}",
+                task.getDocId(), task.getVersionId(), permanentKey);
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
@@ -103,26 +102,9 @@ public class VerifyDiffUseCase {
         return diffS3Key;
     }
 
-    private VerificationResultMessage successResult(VerifyTaskMessage task, String actualChecksum) {
-        return VerificationResultMessage.builder()
-                .metadata(resultPublisher.buildMetadata(task))
-                .docId(task.getDocId())
-                .versionId(task.getVersionId())
-                .status(ProcessingStatus.SUCCEEDED)
-                .actualChecksum(actualChecksum)
-                .build();
-    }
-
-    private VerificationResultMessage failureResult(VerifyTaskMessage task, FailureReason reason, String actualChecksum) {
-        return VerificationResultMessage.builder()
-                .metadata(resultPublisher.buildMetadata(task))
-                .docId(task.getDocId())
-                .versionId(task.getVersionId())
-                .status(ProcessingStatus.FAILED)
-                .failureReason(reason)
-                .actualChecksum(actualChecksum)
-                .build();
+    private void recordFailure(VerifyTaskMessage task, FailureReason reason) {
+        notificationWriteGateway.recordFailure(
+                task.getRecipientId(), task.getDocId(), task.getVersionId(),
+                task.getTaskType().name(), reason);
     }
 }
-
-

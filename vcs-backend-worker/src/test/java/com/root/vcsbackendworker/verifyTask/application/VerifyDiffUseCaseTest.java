@@ -1,20 +1,17 @@
-package com.root.vcsbackendworker.verify.application;
+package com.root.vcsbackendworker.verifyTask.application;
 
+import com.root.vcsbackendworker.shared.db.NotificationWriteGateway;
 import com.root.vcsbackendworker.shared.diff.DiffApplicationException;
 import com.root.vcsbackendworker.shared.diff.DiffApplicator;
+import com.root.vcsbackendworker.shared.messaging.FailureReason;
 import com.root.vcsbackendworker.shared.messaging.MessageMetadata;
-import com.root.vcsbackendworker.shared.messaging.WorkerResultPublisher;
 import com.root.vcsbackendworker.shared.messaging.inbound.VerifyTaskMessage;
-import com.root.vcsbackendworker.shared.messaging.outbound.FailureReason;
-import com.root.vcsbackendworker.shared.messaging.outbound.ProcessingStatus;
-import com.root.vcsbackendworker.shared.messaging.outbound.VerificationResultMessage;
+import com.root.vcsbackendworker.shared.messaging.inbound.WorkerTaskType;
 import com.root.vcsbackendworker.shared.s3.S3DocumentStorage;
-import com.root.vcsbackendworker.verify.domain.ChecksumVerifier;
+import com.root.vcsbackendworker.shared.verify.ChecksumVerifier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -22,7 +19,6 @@ import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -32,13 +28,12 @@ class VerifyDiffUseCaseTest {
     @Mock S3DocumentStorage s3;
     @Mock DiffApplicator diffApplicator;
     @Mock ChecksumVerifier checksumVerifier;
-    @Mock WorkerResultPublisher resultPublisher;
+    @Mock NotificationWriteGateway notificationWriteGateway;
     @InjectMocks VerifyDiffUseCase useCase;
-
-    @Captor ArgumentCaptor<VerificationResultMessage> resultCaptor;
 
     static final UUID DOC_ID = UUID.randomUUID();
     static final UUID VERSION_ID = UUID.randomUUID();
+    static final UUID RECIPIENT_ID = UUID.randomUUID();
     static final String BASE_KEY = "documents/" + DOC_ID + "/v1";
     static final String DIFF_KEY = "documents/" + DOC_ID + "/v2.diff";
     static final String PERMANENT_KEY = "documents/" + DOC_ID + "/v2";
@@ -54,19 +49,19 @@ class VerifyDiffUseCaseTest {
         validTask = VerifyTaskMessage.builder()
                 .docId(DOC_ID)
                 .versionId(VERSION_ID)
+                .recipientId(RECIPIENT_ID)
+                .taskType(WorkerTaskType.VERIFY_DIFF)
                 .metadata(MessageMetadata.builder().correlationId(UUID.randomUUID()).build())
                 .latestVersionS3Key(BASE_KEY)
                 .diffS3Key(DIFF_KEY)
                 .expectedChecksum(CHECKSUM)
                 .build();
-
-        when(resultPublisher.buildMetadata(any())).thenReturn(MessageMetadata.builder().build());
     }
 
     // ── happy path ────────────────────────────────────────────────────────────
 
     @Test
-    void handle_happyPath_publishesSucceeded() {
+    void handle_happyPath_uploadsAndRecordsSuccess() {
         when(s3.fetchBytes(BASE_KEY)).thenReturn(BASE_BYTES);
         when(s3.fetchBytes(DIFF_KEY)).thenReturn(DIFF_BYTES);
         when(diffApplicator.apply(BASE_BYTES, DIFF_BYTES)).thenReturn(RESULT_BYTES);
@@ -75,13 +70,7 @@ class VerifyDiffUseCaseTest {
         useCase.handle(validTask);
 
         verify(s3).uploadBytes(PERMANENT_KEY, RESULT_BYTES);
-        verify(resultPublisher).publish(resultCaptor.capture());
-        VerificationResultMessage result = resultCaptor.getValue();
-        assertThat(result.getStatus()).isEqualTo(ProcessingStatus.SUCCEEDED);
-        assertThat(result.getActualChecksum()).isEqualTo(CHECKSUM);
-        assertThat(result.getDocId()).isEqualTo(DOC_ID);
-        assertThat(result.getVersionId()).isEqualTo(VERSION_ID);
-        assertThat(result.getFailureReason()).isNull();
+        verify(notificationWriteGateway).recordVerificationSuccess(RECIPIENT_ID, DOC_ID, VERSION_ID, CHECKSUM);
     }
 
     @Test
@@ -100,58 +89,57 @@ class VerifyDiffUseCaseTest {
     // ── base version fetch failures ───────────────────────────────────────────
 
     @Test
-    void handle_baseVersionNotFound_publishesSourceNotFound() {
+    void handle_baseVersionNotFound_recordsSourceNotFound() {
         when(s3.fetchBytes(BASE_KEY)).thenThrow(NoSuchKeyException.builder().build());
 
         useCase.handle(validTask);
 
-        verify(resultPublisher).publish(resultCaptor.capture());
-        assertThat(resultCaptor.getValue().getStatus()).isEqualTo(ProcessingStatus.FAILED);
-        assertThat(resultCaptor.getValue().getFailureReason()).isEqualTo(FailureReason.SOURCE_NOT_FOUND);
+        verify(notificationWriteGateway).recordFailure(RECIPIENT_ID, DOC_ID, VERSION_ID,
+                "VERIFY_DIFF", FailureReason.SOURCE_NOT_FOUND);
         verifyNoInteractions(diffApplicator);
     }
 
     @Test
-    void handle_baseVersionS3Error_publishesStorageError() {
+    void handle_baseVersionS3Error_recordsStorageError() {
         when(s3.fetchBytes(BASE_KEY)).thenThrow(new RuntimeException("S3 unavailable"));
 
         useCase.handle(validTask);
 
-        verify(resultPublisher).publish(resultCaptor.capture());
-        assertThat(resultCaptor.getValue().getFailureReason()).isEqualTo(FailureReason.STORAGE_ERROR);
+        verify(notificationWriteGateway).recordFailure(RECIPIENT_ID, DOC_ID, VERSION_ID,
+                "VERIFY_DIFF", FailureReason.STORAGE_ERROR);
         verifyNoInteractions(diffApplicator);
     }
 
     // ── diff fetch failures ───────────────────────────────────────────────────
 
     @Test
-    void handle_diffNotFound_publishesSourceNotFound() {
+    void handle_diffNotFound_recordsSourceNotFound() {
         when(s3.fetchBytes(BASE_KEY)).thenReturn(BASE_BYTES);
         when(s3.fetchBytes(DIFF_KEY)).thenThrow(NoSuchKeyException.builder().build());
 
         useCase.handle(validTask);
 
-        verify(resultPublisher).publish(resultCaptor.capture());
-        assertThat(resultCaptor.getValue().getFailureReason()).isEqualTo(FailureReason.SOURCE_NOT_FOUND);
+        verify(notificationWriteGateway).recordFailure(RECIPIENT_ID, DOC_ID, VERSION_ID,
+                "VERIFY_DIFF", FailureReason.SOURCE_NOT_FOUND);
         verifyNoInteractions(diffApplicator);
     }
 
     @Test
-    void handle_diffS3Error_publishesStorageError() {
+    void handle_diffS3Error_recordsStorageError() {
         when(s3.fetchBytes(BASE_KEY)).thenReturn(BASE_BYTES);
         when(s3.fetchBytes(DIFF_KEY)).thenThrow(new RuntimeException("S3 unavailable"));
 
         useCase.handle(validTask);
 
-        verify(resultPublisher).publish(resultCaptor.capture());
-        assertThat(resultCaptor.getValue().getFailureReason()).isEqualTo(FailureReason.STORAGE_ERROR);
+        verify(notificationWriteGateway).recordFailure(RECIPIENT_ID, DOC_ID, VERSION_ID,
+                "VERIFY_DIFF", FailureReason.STORAGE_ERROR);
         verifyNoInteractions(diffApplicator);
     }
 
     // ── diff application failure ──────────────────────────────────────────────
 
     @Test
-    void handle_diffApplicationFails_publishesDiffApplyFailed() {
+    void handle_diffApplicationFails_recordsDiffApplyFailed() {
         when(s3.fetchBytes(BASE_KEY)).thenReturn(BASE_BYTES);
         when(s3.fetchBytes(DIFF_KEY)).thenReturn(DIFF_BYTES);
         when(diffApplicator.apply(BASE_BYTES, DIFF_BYTES))
@@ -159,15 +147,15 @@ class VerifyDiffUseCaseTest {
 
         useCase.handle(validTask);
 
-        verify(resultPublisher).publish(resultCaptor.capture());
-        assertThat(resultCaptor.getValue().getFailureReason()).isEqualTo(FailureReason.DIFF_APPLY_FAILED);
+        verify(notificationWriteGateway).recordFailure(RECIPIENT_ID, DOC_ID, VERSION_ID,
+                "VERIFY_DIFF", FailureReason.DIFF_APPLY_FAILED);
         verify(s3, never()).uploadBytes(any(), any());
     }
 
     // ── checksum mismatch ─────────────────────────────────────────────────────
 
     @Test
-    void handle_checksumMismatch_publishesChecksumMismatchWithActualHash() {
+    void handle_checksumMismatch_recordsChecksumMismatch() {
         when(s3.fetchBytes(BASE_KEY)).thenReturn(BASE_BYTES);
         when(s3.fetchBytes(DIFF_KEY)).thenReturn(DIFF_BYTES);
         when(diffApplicator.apply(BASE_BYTES, DIFF_BYTES)).thenReturn(RESULT_BYTES);
@@ -175,17 +163,15 @@ class VerifyDiffUseCaseTest {
 
         useCase.handle(validTask);
 
-        verify(resultPublisher).publish(resultCaptor.capture());
-        VerificationResultMessage result = resultCaptor.getValue();
-        assertThat(result.getFailureReason()).isEqualTo(FailureReason.CHECKSUM_MISMATCH);
-        assertThat(result.getActualChecksum()).isEqualTo("wronghash");
+        verify(notificationWriteGateway).recordFailure(RECIPIENT_ID, DOC_ID, VERSION_ID,
+                "VERIFY_DIFF", FailureReason.CHECKSUM_MISMATCH);
         verify(s3, never()).uploadBytes(any(), any());
     }
 
     // ── upload failure ────────────────────────────────────────────────────────
 
     @Test
-    void handle_uploadFails_publishesStorageError() {
+    void handle_uploadFails_recordsStorageError() {
         when(s3.fetchBytes(BASE_KEY)).thenReturn(BASE_BYTES);
         when(s3.fetchBytes(DIFF_KEY)).thenReturn(DIFF_BYTES);
         when(diffApplicator.apply(BASE_BYTES, DIFF_BYTES)).thenReturn(RESULT_BYTES);
@@ -194,22 +180,19 @@ class VerifyDiffUseCaseTest {
 
         useCase.handle(validTask);
 
-        verify(resultPublisher).publish(resultCaptor.capture());
-        VerificationResultMessage result = resultCaptor.getValue();
-        assertThat(result.getFailureReason()).isEqualTo(FailureReason.STORAGE_ERROR);
-        // actualChecksum is still populated even on upload failure
-        assertThat(result.getActualChecksum()).isEqualTo(CHECKSUM);
+        verify(notificationWriteGateway).recordFailure(RECIPIENT_ID, DOC_ID, VERSION_ID,
+                "VERIFY_DIFF", FailureReason.STORAGE_ERROR);
     }
 
     // ── early return guarantees ───────────────────────────────────────────────
 
     @Test
-    void handle_anyFailure_publishesExactlyOnce() {
+    void handle_anyFailure_recordsExactlyOnce() {
         when(s3.fetchBytes(BASE_KEY)).thenThrow(NoSuchKeyException.builder().build());
 
         useCase.handle(validTask);
 
-        verify(resultPublisher, times(1)).publish(any(VerificationResultMessage.class));
+        verify(notificationWriteGateway, times(1)).recordFailure(any(), any(), any(), any(), any());
+        verify(notificationWriteGateway, never()).recordVerificationSuccess(any(), any(), any(), any());
     }
 }
-

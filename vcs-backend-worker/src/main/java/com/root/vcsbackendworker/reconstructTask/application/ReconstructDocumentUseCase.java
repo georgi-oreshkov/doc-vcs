@@ -1,16 +1,14 @@
-package com.root.vcsbackendworker.reconstruct.application;
+package com.root.vcsbackendworker.reconstructTask.application;
 
+import com.root.vcsbackendworker.shared.db.NotificationWriteGateway;
 import com.root.vcsbackendworker.shared.db.VersionQueryGateway;
 import com.root.vcsbackendworker.shared.db.VersionRow;
 import com.root.vcsbackendworker.shared.diff.DiffApplicationException;
 import com.root.vcsbackendworker.shared.diff.DiffApplicator;
-import com.root.vcsbackendworker.shared.messaging.WorkerResultPublisher;
+import com.root.vcsbackendworker.shared.messaging.FailureReason;
 import com.root.vcsbackendworker.shared.messaging.inbound.ReconstructTaskMessage;
-import com.root.vcsbackendworker.shared.messaging.outbound.FailureReason;
-import com.root.vcsbackendworker.shared.messaging.outbound.ProcessingStatus;
-import com.root.vcsbackendworker.shared.messaging.outbound.ReconstructionResultMessage;
 import com.root.vcsbackendworker.shared.s3.S3DocumentStorage;
-import com.root.vcsbackendworker.verify.domain.ChecksumVerifier;
+import com.root.vcsbackendworker.shared.verify.ChecksumVerifier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,12 +22,11 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ReconstructDocumentUseCase {
 
-
     private final VersionQueryGateway versionQueryGateway;
     private final S3DocumentStorage s3;
     private final DiffApplicator diffApplicator;
     private final ChecksumVerifier checksumVerifier;
-    private final WorkerResultPublisher resultPublisher;
+    private final NotificationWriteGateway notificationWriteGateway;
 
     public void handle(ReconstructTaskMessage task) {
         log.info("Reconstruct task started: docId={}, versionId={}, targetVersion={}",
@@ -39,7 +36,7 @@ public class ReconstructDocumentUseCase {
         Optional<VersionRow> targetRowOpt = versionQueryGateway.findById(task.getVersionId());
         if (targetRowOpt.isEmpty()) {
             log.error("Target version not found in DB: versionId={}", task.getVersionId());
-            resultPublisher.publish(failureResult(task, FailureReason.SOURCE_NOT_FOUND));
+            recordFailure(task, FailureReason.SOURCE_NOT_FOUND);
             return;
         }
         VersionRow targetRow = targetRowOpt.get();
@@ -52,11 +49,11 @@ public class ReconstructDocumentUseCase {
                 resultBytes = s3.fetchBytes(targetRow.getS3Key());
             } catch (NoSuchKeyException e) {
                 log.error("Snapshot not found in S3: key={}", targetRow.getS3Key(), e);
-                resultPublisher.publish(failureResult(task, FailureReason.SOURCE_NOT_FOUND));
+                recordFailure(task, FailureReason.SOURCE_NOT_FOUND);
                 return;
             } catch (Exception e) {
                 log.error("Failed to fetch snapshot from S3: key={}", targetRow.getS3Key(), e);
-                resultPublisher.publish(failureResult(task, FailureReason.STORAGE_ERROR));
+                recordFailure(task, FailureReason.STORAGE_ERROR);
                 return;
             }
         } else {
@@ -65,7 +62,7 @@ public class ReconstructDocumentUseCase {
                     .findLastSnapshotBefore(task.getDocId(), task.getTargetVersionNumber());
             if (snapshotOpt.isEmpty()) {
                 log.error("No snapshot found before targetVersion={} for docId={}", task.getTargetVersionNumber(), task.getDocId());
-                resultPublisher.publish(failureResult(task, FailureReason.SOURCE_NOT_FOUND));
+                recordFailure(task, FailureReason.SOURCE_NOT_FOUND);
                 return;
             }
             VersionRow snapshot = snapshotOpt.get();
@@ -76,11 +73,11 @@ public class ReconstructDocumentUseCase {
                 current = s3.fetchBytes(snapshot.getS3Key());
             } catch (NoSuchKeyException e) {
                 log.error("Snapshot not found in S3: key={}", snapshot.getS3Key(), e);
-                resultPublisher.publish(failureResult(task, FailureReason.SOURCE_NOT_FOUND));
+                recordFailure(task, FailureReason.SOURCE_NOT_FOUND);
                 return;
             } catch (Exception e) {
                 log.error("Failed to fetch snapshot from S3: key={}", snapshot.getS3Key(), e);
-                resultPublisher.publish(failureResult(task, FailureReason.STORAGE_ERROR));
+                recordFailure(task, FailureReason.STORAGE_ERROR);
                 return;
             }
 
@@ -97,11 +94,11 @@ public class ReconstructDocumentUseCase {
                     diffBytes = s3.fetchBytes(diff.getS3Key());
                 } catch (NoSuchKeyException e) {
                     log.error("Diff not found in S3: key={}, versionNumber={}", diff.getS3Key(), diff.getVersionNumber(), e);
-                    resultPublisher.publish(failureResult(task, FailureReason.SOURCE_NOT_FOUND));
+                    recordFailure(task, FailureReason.SOURCE_NOT_FOUND);
                     return;
                 } catch (Exception e) {
                     log.error("Failed to fetch diff from S3: key={}", diff.getS3Key(), e);
-                    resultPublisher.publish(failureResult(task, FailureReason.STORAGE_ERROR));
+                    recordFailure(task, FailureReason.STORAGE_ERROR);
                     return;
                 }
 
@@ -109,7 +106,7 @@ public class ReconstructDocumentUseCase {
                     current = diffApplicator.apply(current, diffBytes);
                 } catch (DiffApplicationException e) {
                     log.error("Failed to apply diff v{} for docId={}", diff.getVersionNumber(), task.getDocId(), e);
-                    resultPublisher.publish(failureResult(task, FailureReason.DIFF_APPLY_FAILED));
+                    recordFailure(task, FailureReason.DIFF_APPLY_FAILED);
                     return;
                 }
 
@@ -118,13 +115,11 @@ public class ReconstructDocumentUseCase {
 
             resultBytes = current;
         }
-
-        // 6. Verify checksum — compute once, compare directly (avoids hashing twice)
-        String actualChecksum = checksumVerifier.sha256Hex(resultBytes);
-        if (!actualChecksum.equalsIgnoreCase(task.getExpectedChecksum())) {
-            log.warn("Checksum mismatch after reconstruction: docId={}, expected={}, actual={}",
-                    task.getDocId(), task.getExpectedChecksum(), actualChecksum);
-            resultPublisher.publish(failureResult(task, FailureReason.CHECKSUM_MISMATCH));
+        // 6. Verify checksum
+        if (!checksumVerifier.matches(resultBytes, task.getExpectedChecksum())) {
+            log.warn("Checksum mismatch after reconstruction: docId={}, expected={}",
+                    task.getDocId(), task.getExpectedChecksum());
+            recordFailure(task, FailureReason.CHECKSUM_MISMATCH);
             return;
         }
 
@@ -134,7 +129,7 @@ public class ReconstructDocumentUseCase {
             s3.uploadBytes(tempKey, resultBytes);
         } catch (Exception e) {
             log.error("Failed to upload reconstructed document: key={}", tempKey, e);
-            resultPublisher.publish(failureResult(task, FailureReason.STORAGE_ERROR));
+            recordFailure(task, FailureReason.STORAGE_ERROR);
             return;
         }
 
@@ -143,13 +138,16 @@ public class ReconstructDocumentUseCase {
             presignedUrl = s3.generatePresignedDownloadUrl(tempKey);
         } catch (Exception e) {
             log.error("Failed to generate presigned URL: key={}", tempKey, e);
-            resultPublisher.publish(failureResult(task, FailureReason.STORAGE_ERROR));
+            recordFailure(task, FailureReason.STORAGE_ERROR);
             return;
         }
 
+        // 8. Insert notification with presigned download URL
+        notificationWriteGateway.recordReconstructionSuccess(
+                task.getRecipientId(), task.getDocId(), task.getVersionId(), presignedUrl);
+
         log.info("Reconstruct task succeeded: docId={}, versionId={}, tempKey={}",
                 task.getDocId(), task.getVersionId(), tempKey);
-        resultPublisher.publish(successResult(task, presignedUrl));
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
@@ -162,25 +160,9 @@ public class ReconstructDocumentUseCase {
         return "tmp/" + docId + "/v" + versionNumber;
     }
 
-    private ReconstructionResultMessage successResult(ReconstructTaskMessage task, String presignedUrl) {
-        return ReconstructionResultMessage.builder()
-                .metadata(resultPublisher.buildMetadata(task))
-                .docId(task.getDocId())
-                .versionId(task.getVersionId())
-                .status(ProcessingStatus.SUCCEEDED)
-                .presignedDownloadUrl(presignedUrl)
-                .build();
-    }
-
-    private ReconstructionResultMessage failureResult(ReconstructTaskMessage task, FailureReason reason) {
-        return ReconstructionResultMessage.builder()
-                .metadata(resultPublisher.buildMetadata(task))
-                .docId(task.getDocId())
-                .versionId(task.getVersionId())
-                .status(ProcessingStatus.FAILED)
-                .failureReason(reason)
-                .build();
+    private void recordFailure(ReconstructTaskMessage task, FailureReason reason) {
+        notificationWriteGateway.recordFailure(
+                task.getRecipientId(), task.getDocId(), task.getVersionId(),
+                task.getTaskType().name(), reason);
     }
 }
-
-

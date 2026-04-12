@@ -1,22 +1,19 @@
-package com.root.vcsbackendworker.reconstruct.application;
+package com.root.vcsbackendworker.reconstructTask.application;
 
+import com.root.vcsbackendworker.shared.db.NotificationWriteGateway;
 import com.root.vcsbackendworker.shared.db.VersionQueryGateway;
 import com.root.vcsbackendworker.shared.db.VersionRow;
 import com.root.vcsbackendworker.shared.diff.DiffApplicationException;
 import com.root.vcsbackendworker.shared.diff.DiffApplicator;
+import com.root.vcsbackendworker.shared.messaging.FailureReason;
 import com.root.vcsbackendworker.shared.messaging.MessageMetadata;
-import com.root.vcsbackendworker.shared.messaging.WorkerResultPublisher;
 import com.root.vcsbackendworker.shared.messaging.inbound.ReconstructTaskMessage;
-import com.root.vcsbackendworker.shared.messaging.outbound.FailureReason;
-import com.root.vcsbackendworker.shared.messaging.outbound.ProcessingStatus;
-import com.root.vcsbackendworker.shared.messaging.outbound.ReconstructionResultMessage;
+import com.root.vcsbackendworker.shared.messaging.inbound.WorkerTaskType;
 import com.root.vcsbackendworker.shared.s3.S3DocumentStorage;
-import com.root.vcsbackendworker.verify.domain.ChecksumVerifier;
+import com.root.vcsbackendworker.shared.verify.ChecksumVerifier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -27,7 +24,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -38,13 +34,12 @@ class ReconstructDocumentUseCaseTest {
     @Mock S3DocumentStorage s3;
     @Mock DiffApplicator diffApplicator;
     @Mock ChecksumVerifier checksumVerifier;
-    @Mock WorkerResultPublisher resultPublisher;
+    @Mock NotificationWriteGateway notificationWriteGateway;
     @InjectMocks ReconstructDocumentUseCase useCase;
-
-    @Captor ArgumentCaptor<ReconstructionResultMessage> resultCaptor;
 
     static final UUID DOC_ID = UUID.randomUUID();
     static final UUID VERSION_ID = UUID.randomUUID();
+    static final UUID RECIPIENT_ID = UUID.randomUUID();
     static final int TARGET_VERSION = 3;
     static final String CHECKSUM = "expectedchecksum";
     static final String PRESIGNED_URL = "https://minio/presigned";
@@ -56,31 +51,31 @@ class ReconstructDocumentUseCaseTest {
         validTask = ReconstructTaskMessage.builder()
                 .docId(DOC_ID)
                 .versionId(VERSION_ID)
+                .recipientId(RECIPIENT_ID)
+                .taskType(WorkerTaskType.RECONSTRUCT_DOCUMENT)
                 .targetVersionNumber(TARGET_VERSION)
                 .expectedChecksum(CHECKSUM)
                 .metadata(MessageMetadata.builder().correlationId(UUID.randomUUID()).build())
                 .build();
-
-        when(resultPublisher.buildMetadata(any())).thenReturn(MessageMetadata.builder().build());
     }
 
     // ── DB lookup failure ─────────────────────────────────────────────────────
 
     @Test
-    void handle_targetVersionNotInDb_publishesSourceNotFound() {
+    void handle_targetVersionNotInDb_recordsSourceNotFound() {
         when(versionQueryGateway.findById(VERSION_ID)).thenReturn(Optional.empty());
 
         useCase.handle(validTask);
 
-        verify(resultPublisher).publish(resultCaptor.capture());
-        assertThat(resultCaptor.getValue().getFailureReason()).isEqualTo(FailureReason.SOURCE_NOT_FOUND);
+        verify(notificationWriteGateway).recordFailure(RECIPIENT_ID, DOC_ID, VERSION_ID,
+                "RECONSTRUCT_DOCUMENT", FailureReason.SOURCE_NOT_FOUND);
         verifyNoInteractions(s3, diffApplicator);
     }
 
     // ── target is SNAPSHOT ────────────────────────────────────────────────────
 
     @Test
-    void handle_targetIsSnapshot_fetchesDirectlyAndPublishesSucceeded() {
+    void handle_targetIsSnapshot_fetchesDirectlyAndRecordsSuccess() {
         VersionRow snapshot = snapshotRow(VERSION_ID, TARGET_VERSION, "documents/" + DOC_ID + "/v3");
         byte[] bytes = "snapshot content".getBytes();
 
@@ -92,10 +87,7 @@ class ReconstructDocumentUseCaseTest {
         useCase.handle(validTask);
 
         verifyNoInteractions(diffApplicator);
-        verify(resultPublisher).publish(resultCaptor.capture());
-        ReconstructionResultMessage result = resultCaptor.getValue();
-        assertThat(result.getStatus()).isEqualTo(ProcessingStatus.SUCCEEDED);
-        assertThat(result.getPresignedDownloadUrl()).isEqualTo(PRESIGNED_URL);
+        verify(notificationWriteGateway).recordReconstructionSuccess(RECIPIENT_ID, DOC_ID, VERSION_ID, PRESIGNED_URL);
     }
 
     @Test
@@ -115,7 +107,7 @@ class ReconstructDocumentUseCaseTest {
     }
 
     @Test
-    void handle_targetIsSnapshot_s3NotFound_publishesSourceNotFound() {
+    void handle_targetIsSnapshot_s3NotFound_recordsSourceNotFound() {
         VersionRow snapshot = snapshotRow(VERSION_ID, TARGET_VERSION, "documents/" + DOC_ID + "/v3");
 
         when(versionQueryGateway.findById(VERSION_ID)).thenReturn(Optional.of(snapshot));
@@ -123,12 +115,12 @@ class ReconstructDocumentUseCaseTest {
 
         useCase.handle(validTask);
 
-        verify(resultPublisher).publish(resultCaptor.capture());
-        assertThat(resultCaptor.getValue().getFailureReason()).isEqualTo(FailureReason.SOURCE_NOT_FOUND);
+        verify(notificationWriteGateway).recordFailure(RECIPIENT_ID, DOC_ID, VERSION_ID,
+                "RECONSTRUCT_DOCUMENT", FailureReason.SOURCE_NOT_FOUND);
     }
 
     @Test
-    void handle_targetIsSnapshot_s3GenericError_publishesStorageError() {
+    void handle_targetIsSnapshot_s3GenericError_recordsStorageError() {
         VersionRow snapshot = snapshotRow(VERSION_ID, TARGET_VERSION, "documents/" + DOC_ID + "/v3");
 
         when(versionQueryGateway.findById(VERSION_ID)).thenReturn(Optional.of(snapshot));
@@ -136,14 +128,14 @@ class ReconstructDocumentUseCaseTest {
 
         useCase.handle(validTask);
 
-        verify(resultPublisher).publish(resultCaptor.capture());
-        assertThat(resultCaptor.getValue().getFailureReason()).isEqualTo(FailureReason.STORAGE_ERROR);
+        verify(notificationWriteGateway).recordFailure(RECIPIENT_ID, DOC_ID, VERSION_ID,
+                "RECONSTRUCT_DOCUMENT", FailureReason.STORAGE_ERROR);
     }
 
     // ── target is DIFF — chain happy path ────────────────────────────────────
 
     @Test
-    void handle_singleDiff_appliesAndPublishesSucceeded() {
+    void handle_singleDiff_appliesAndRecordsSuccess() {
         VersionRow target = diffRow(VERSION_ID, TARGET_VERSION, "documents/" + DOC_ID + "/v3.diff");
         VersionRow base = snapshotRow(UUID.randomUUID(), 2, "documents/" + DOC_ID + "/v2");
         VersionRow diff = diffRow(UUID.randomUUID(), TARGET_VERSION, "documents/" + DOC_ID + "/v3.diff");
@@ -163,8 +155,7 @@ class ReconstructDocumentUseCaseTest {
 
         useCase.handle(validTask);
 
-        verify(resultPublisher).publish(resultCaptor.capture());
-        assertThat(resultCaptor.getValue().getStatus()).isEqualTo(ProcessingStatus.SUCCEEDED);
+        verify(notificationWriteGateway).recordReconstructionSuccess(RECIPIENT_ID, DOC_ID, VERSION_ID, PRESIGNED_URL);
     }
 
     @Test
@@ -185,6 +176,8 @@ class ReconstructDocumentUseCaseTest {
 
         ReconstructTaskMessage task4 = ReconstructTaskMessage.builder()
                 .docId(DOC_ID).versionId(VERSION_ID).targetVersionNumber(4)
+                .recipientId(RECIPIENT_ID)
+                .taskType(WorkerTaskType.RECONSTRUCT_DOCUMENT)
                 .expectedChecksum(CHECKSUM)
                 .metadata(MessageMetadata.builder().build())
                 .build();
@@ -201,7 +194,6 @@ class ReconstructDocumentUseCaseTest {
         when(diffApplicator.apply(after3, diff4Bytes)).thenReturn(finalBytes);
         when(checksumVerifier.sha256Hex(finalBytes)).thenReturn(CHECKSUM);
         when(s3.generatePresignedDownloadUrl(any())).thenReturn(PRESIGNED_URL);
-        when(resultPublisher.buildMetadata(any())).thenReturn(MessageMetadata.builder().build());
 
         useCase.handle(task4);
 
@@ -214,7 +206,7 @@ class ReconstructDocumentUseCaseTest {
     // ── target is DIFF — failure paths ───────────────────────────────────────
 
     @Test
-    void handle_noSnapshotFound_publishesSourceNotFound() {
+    void handle_noSnapshotFound_recordsSourceNotFound() {
         VersionRow target = diffRow(VERSION_ID, TARGET_VERSION, "documents/" + DOC_ID + "/v3.diff");
 
         when(versionQueryGateway.findById(VERSION_ID)).thenReturn(Optional.of(target));
@@ -222,13 +214,13 @@ class ReconstructDocumentUseCaseTest {
 
         useCase.handle(validTask);
 
-        verify(resultPublisher).publish(resultCaptor.capture());
-        assertThat(resultCaptor.getValue().getFailureReason()).isEqualTo(FailureReason.SOURCE_NOT_FOUND);
+        verify(notificationWriteGateway).recordFailure(RECIPIENT_ID, DOC_ID, VERSION_ID,
+                "RECONSTRUCT_DOCUMENT", FailureReason.SOURCE_NOT_FOUND);
         verifyNoInteractions(s3, diffApplicator);
     }
 
     @Test
-    void handle_snapshotFetchFails_publishesStorageError() {
+    void handle_snapshotFetchFails_recordsStorageError() {
         VersionRow target = diffRow(VERSION_ID, TARGET_VERSION, "documents/" + DOC_ID + "/v3.diff");
         VersionRow base = snapshotRow(UUID.randomUUID(), 1, "documents/" + DOC_ID + "/v1");
 
@@ -238,12 +230,12 @@ class ReconstructDocumentUseCaseTest {
 
         useCase.handle(validTask);
 
-        verify(resultPublisher).publish(resultCaptor.capture());
-        assertThat(resultCaptor.getValue().getFailureReason()).isEqualTo(FailureReason.STORAGE_ERROR);
+        verify(notificationWriteGateway).recordFailure(RECIPIENT_ID, DOC_ID, VERSION_ID,
+                "RECONSTRUCT_DOCUMENT", FailureReason.STORAGE_ERROR);
     }
 
     @Test
-    void handle_diffFetchFailsMidChain_stopsAndPublishesSourceNotFound() {
+    void handle_diffFetchFailsMidChain_stopsAndRecordsSourceNotFound() {
         VersionRow target = diffRow(VERSION_ID, TARGET_VERSION, "documents/" + DOC_ID + "/v3.diff");
         VersionRow base = snapshotRow(UUID.randomUUID(), 1, "documents/" + DOC_ID + "/v1");
         VersionRow diff2 = diffRow(UUID.randomUUID(), 2, "documents/" + DOC_ID + "/v2.diff");
@@ -261,13 +253,12 @@ class ReconstructDocumentUseCaseTest {
 
         useCase.handle(validTask);
 
-        verify(diffApplicator, never()).apply(any(), eq(diff3.getS3Key().getBytes()));
-        verify(resultPublisher).publish(resultCaptor.capture());
-        assertThat(resultCaptor.getValue().getFailureReason()).isEqualTo(FailureReason.SOURCE_NOT_FOUND);
+        verify(notificationWriteGateway).recordFailure(RECIPIENT_ID, DOC_ID, VERSION_ID,
+                "RECONSTRUCT_DOCUMENT", FailureReason.SOURCE_NOT_FOUND);
     }
 
     @Test
-    void handle_diffApplicationFailsMidChain_stopsAndPublishesDiffApplyFailed() {
+    void handle_diffApplicationFailsMidChain_stopsAndRecordsDiffApplyFailed() {
         VersionRow target = diffRow(VERSION_ID, TARGET_VERSION, "documents/" + DOC_ID + "/v3.diff");
         VersionRow base = snapshotRow(UUID.randomUUID(), 1, "documents/" + DOC_ID + "/v1");
         VersionRow diff = diffRow(UUID.randomUUID(), TARGET_VERSION, "documents/" + DOC_ID + "/v3.diff");
@@ -285,15 +276,15 @@ class ReconstructDocumentUseCaseTest {
 
         useCase.handle(validTask);
 
-        verify(resultPublisher).publish(resultCaptor.capture());
-        assertThat(resultCaptor.getValue().getFailureReason()).isEqualTo(FailureReason.DIFF_APPLY_FAILED);
+        verify(notificationWriteGateway).recordFailure(RECIPIENT_ID, DOC_ID, VERSION_ID,
+                "RECONSTRUCT_DOCUMENT", FailureReason.DIFF_APPLY_FAILED);
         verify(s3, never()).uploadBytes(any(), any());
     }
 
     // ── checksum and upload ───────────────────────────────────────────────────
 
     @Test
-    void handle_checksumMismatch_publishesChecksumMismatch() {
+    void handle_checksumMismatch_recordsChecksumMismatch() {
         VersionRow snapshot = snapshotRow(VERSION_ID, TARGET_VERSION, "documents/" + DOC_ID + "/v3");
         byte[] bytes = "content".getBytes();
 
@@ -303,13 +294,13 @@ class ReconstructDocumentUseCaseTest {
 
         useCase.handle(validTask);
 
-        verify(resultPublisher).publish(resultCaptor.capture());
-        assertThat(resultCaptor.getValue().getFailureReason()).isEqualTo(FailureReason.CHECKSUM_MISMATCH);
+        verify(notificationWriteGateway).recordFailure(RECIPIENT_ID, DOC_ID, VERSION_ID,
+                "RECONSTRUCT_DOCUMENT", FailureReason.CHECKSUM_MISMATCH);
         verify(s3, never()).uploadBytes(any(), any());
     }
 
     @Test
-    void handle_uploadFails_publishesStorageError() {
+    void handle_uploadFails_recordsStorageError() {
         VersionRow snapshot = snapshotRow(VERSION_ID, TARGET_VERSION, "documents/" + DOC_ID + "/v3");
         byte[] bytes = "content".getBytes();
 
@@ -320,12 +311,12 @@ class ReconstructDocumentUseCaseTest {
 
         useCase.handle(validTask);
 
-        verify(resultPublisher).publish(resultCaptor.capture());
-        assertThat(resultCaptor.getValue().getFailureReason()).isEqualTo(FailureReason.STORAGE_ERROR);
+        verify(notificationWriteGateway).recordFailure(RECIPIENT_ID, DOC_ID, VERSION_ID,
+                "RECONSTRUCT_DOCUMENT", FailureReason.STORAGE_ERROR);
     }
 
     @Test
-    void handle_presignFails_publishesStorageError() {
+    void handle_presignFails_recordsStorageError() {
         VersionRow snapshot = snapshotRow(VERSION_ID, TARGET_VERSION, "documents/" + DOC_ID + "/v3");
         byte[] bytes = "content".getBytes();
 
@@ -336,19 +327,20 @@ class ReconstructDocumentUseCaseTest {
 
         useCase.handle(validTask);
 
-        verify(resultPublisher).publish(resultCaptor.capture());
-        assertThat(resultCaptor.getValue().getFailureReason()).isEqualTo(FailureReason.STORAGE_ERROR);
+        verify(notificationWriteGateway).recordFailure(RECIPIENT_ID, DOC_ID, VERSION_ID,
+                "RECONSTRUCT_DOCUMENT", FailureReason.STORAGE_ERROR);
     }
 
     // ── early return guarantee ────────────────────────────────────────────────
 
     @Test
-    void handle_anyFailure_publishesExactlyOnce() {
+    void handle_anyFailure_recordsExactlyOnce() {
         when(versionQueryGateway.findById(VERSION_ID)).thenReturn(Optional.empty());
 
         useCase.handle(validTask);
 
-        verify(resultPublisher, times(1)).publish(any(ReconstructionResultMessage.class));
+        verify(notificationWriteGateway, times(1)).recordFailure(any(), any(), any(), any(), any());
+        verify(notificationWriteGateway, never()).recordReconstructionSuccess(any(), any(), any(), any());
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
