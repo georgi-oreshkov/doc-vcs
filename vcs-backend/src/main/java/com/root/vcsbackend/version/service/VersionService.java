@@ -12,6 +12,7 @@ import com.root.vcsbackend.shared.redis.DiffTaskPublisher;
 import com.root.vcsbackend.shared.redis.message.ReconstructTaskMessage;
 import com.root.vcsbackend.shared.redis.message.VerifyTaskMessage;
 import com.root.vcsbackend.shared.redis.message.WorkerTaskType;
+import com.root.vcsbackend.shared.s3.S3KeyTemplates;
 import com.root.vcsbackend.shared.s3.S3PresignService;
 import com.root.vcsbackend.shared.security.OrgRoleLookup;
 import com.root.vcsbackend.version.domain.CommentEntity;
@@ -59,8 +60,7 @@ public class VersionService {
             .map(v -> v.getVersionNumber() + 1)
             .orElse(1);
 
-        String s3Key = "documents/" + docId + "/v" + nextNumber;
-        VersionEntity version = versionMapper.toEntity(req, docId, nextNumber, s3Key);
+        VersionEntity version = versionMapper.toEntity(req, docId, nextNumber);
         version = versionRepository.save(version);
 
         documentFacade.updateLatestVersionId(docId, version.getId());
@@ -69,11 +69,9 @@ public class VersionService {
         if (Boolean.FALSE.equals(version.getIsDraft())) {
             documentFacade.updateStatusToPendingReview(docId);
 
-            // If the request carries a checksum and a diff S3 key, ask the worker
-            // to verify the diff against the previous version.
-            String diffS3Key = s3Key + ".diff";
-            String previousS3Key = findPreviousVersionS3Key(docId, nextNumber);
-            if (previousS3Key != null && req.getChecksum() != null) {
+            // If the request carries a checksum and a previous version exists,
+            // ask the worker to verify the diff against the previous version.
+            if (hasPreviousVersion(docId, nextNumber) && req.getChecksum() != null) {
                 diffTaskPublisher.publish(
                         VerifyTaskMessage.builder()
                                 .taskType(WorkerTaskType.VERIFY_DIFF)
@@ -81,12 +79,12 @@ public class VersionService {
                                 .versionId(version.getId())
                                 .recipientId(callerId)
                                 .expectedChecksum(req.getChecksum())
-                                .latestVersionS3Key(previousS3Key)
-                                .diffS3Key(diffS3Key)
+                                .newVersionNumber(nextNumber)
                                 .build());
             }
         }
 
+        String s3Key = S3KeyTemplates.permanentVersion(docId, nextNumber);
         return new S3UploadResponse().uploadUrl(java.net.URI.create(s3PresignService.generateUploadUrl(s3Key)));
     }
 
@@ -207,7 +205,9 @@ public class VersionService {
         }
 
         return new GetVersionDownloadUrl200Response()
-            .downloadUrl(java.net.URI.create(s3PresignService.generateDownloadUrl(version.getS3Key())));
+            .downloadUrl(java.net.URI.create(
+                s3PresignService.generateDownloadUrl(
+                    S3KeyTemplates.permanentVersion(docId, version.getVersionNumber()))));
     }
 
     /**
@@ -258,7 +258,7 @@ public class VersionService {
         VersionEntity rollback = versionRepository.save(VersionEntity.builder()
             .docId(docId).versionNumber(nextNumber)
             .status(VersionStatus.PENDING).isDraft(false)
-            .s3Key(target.getS3Key()).checksum(target.getChecksum())
+            .checksum(target.getChecksum())
             .storageType(target.getStorageType())
             .build());
 
@@ -286,18 +286,18 @@ public class VersionService {
                             .targetVersionNumber(version.getVersionNumber())
                             .build());
         }
-        return s3PresignService.generateDownloadUrl(version.getS3Key());
+        return s3PresignService.generateDownloadUrl(
+                S3KeyTemplates.permanentVersion(docId, version.getVersionNumber()));
     }
 
     /**
-     * Returns the S3 key of the version immediately before {@code currentNumber},
-     * or {@code null} if this is the first version.
+     * Returns {@code true} if there is at least one version before {@code currentNumber}
+     * for the given document.
      */
-    private String findPreviousVersionS3Key(UUID docId, int currentNumber) {
-        if (currentNumber <= 1) return null;
+    private boolean hasPreviousVersion(UUID docId, int currentNumber) {
+        if (currentNumber <= 1) return false;
         return versionRepository.findTopByDocIdAndVersionNumberLessThanOrderByVersionNumberDesc(docId, currentNumber)
-                .map(VersionEntity::getS3Key)
-                .orElse(null);
+                .isPresent();
     }
 
     private VersionEntity resolveAndValidate(UUID docId, UUID versionId) {

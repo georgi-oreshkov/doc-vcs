@@ -40,15 +40,13 @@ public class VersionFacade {
      */
     @Transactional
     public VersionSummary createInitialVersion(UUID docId) {
-        String s3Key = "documents/" + docId + "/v1";
         VersionEntity version = VersionEntity.builder()
             .docId(docId)
             .versionNumber(1)
             .status(VersionStatus.PENDING)
             .isDraft(true)
-            .s3Key(s3Key)
             .build();
         VersionEntity saved = versionRepository.save(version);
-        return new VersionSummary(saved.getId(), saved.getS3Key());
+        return new VersionSummary(saved.getId(), saved.getVersionNumber());
     }
 }

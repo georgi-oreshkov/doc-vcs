@@ -13,7 +13,6 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Instant;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * Publishes worker task messages to a <b>Redis Stream</b> via {@code XADD}.
@@ -72,9 +71,6 @@ public class DiffTaskPublisher {
             task.setMetadata(MessageMetadata.builder().build());
         }
         MessageMetadata meta = task.getMetadata();
-        if (meta.getCorrelationId() == null) {
-            meta.setCorrelationId(UUID.randomUUID());
-        }
         meta.setEmittedAt(Instant.now());
         meta.setProducer(PRODUCER);
     }

@@ -10,6 +10,7 @@ import com.root.vcsbackend.model.CreateCategoryRequest;
 import com.root.vcsbackend.model.CreateDocumentRequest;
 import com.root.vcsbackend.model.S3UploadResponse;
 import com.root.vcsbackend.shared.exception.AppException;
+import com.root.vcsbackend.shared.s3.S3KeyTemplates;
 import com.root.vcsbackend.shared.s3.S3PresignService;
 import com.root.vcsbackend.version.api.VersionFacade;
 import com.root.vcsbackend.version.api.VersionSummary;
@@ -47,7 +48,8 @@ public class DocumentService {
         doc.setLatestVersionId(initial.id());
         documentRepository.save(doc);
 
-        String uploadUrl = s3PresignService.generateUploadUrl(initial.s3Key());
+        String s3Key = S3KeyTemplates.permanentVersion(doc.getId(), initial.versionNumber());
+        String uploadUrl = s3PresignService.generateUploadUrl(s3Key);
         return new S3UploadResponse().uploadUrl(java.net.URI.create(uploadUrl));
     }
 

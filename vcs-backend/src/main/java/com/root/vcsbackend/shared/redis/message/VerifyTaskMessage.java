@@ -9,6 +9,9 @@ import lombok.experimental.SuperBuilder;
 /**
  * Task message sent to the worker to verify that applying a diff to the latest
  * version produces a document whose checksum matches the expected value.
+ * <p>
+ * The worker derives the actual S3 keys from {@code docId} + {@code newVersionNumber}
+ * using {@code S3KeyTemplates} — no explicit keys are sent.
  */
 @Data
 @SuperBuilder
@@ -17,10 +20,7 @@ import lombok.experimental.SuperBuilder;
 @EqualsAndHashCode(callSuper = true)
 public class VerifyTaskMessage extends WorkerTaskMessage {
 
-    /** S3 key to the latest (current) full version of the document. */
-    private String latestVersionS3Key;
-
-    /** S3 key for the incoming diff uploaded by the client. */
-    private String diffS3Key;
+    /** The version number being created (the new diff version). */
+    private Integer newVersionNumber;
 }
 
