@@ -18,7 +18,7 @@ export default function App() {
   useEffect(() => {
     // We check the variable (currentView) and run the setter function (setCurrentView)
     if (auth.isAuthenticated && currentView === 'landing') {
-      setCurrentView('documents'); 
+      setCurrentView('organizations'); 
     }
   }, [auth.isAuthenticated, currentView]); 
 

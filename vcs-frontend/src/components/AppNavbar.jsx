@@ -20,9 +20,12 @@ export default function AppNavbar({ currentView, setView }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const auth = useAuth();
 
-  // Centralized navigation handler
+  // --- THE SMART ROUTER ---
   const handleNavigation = (view) => {
-    setView(view);
+    // If they try to go to 'landing' but are logged in, hijack it to 'documents'
+    const targetView = (view === 'landing' && auth.isAuthenticated) ? 'documents' : view;
+    
+    setView(targetView);
     setIsMenuOpen(false); // Auto-close mobile menu on click
   };
 

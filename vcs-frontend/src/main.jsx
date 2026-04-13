@@ -11,6 +11,7 @@ const oidcConfig = {
   authority: "http://localhost:18080/realms/vcs",
   client_id: "vcs-frontend",
   redirect_uri: "http://localhost:5173/",
+  post_logout_redirect_uri: window.location.origin,
   userStore: new WebStorageStateStore({ store: window.localStorage }),
   onSigninCallback: () => {
     window.history.replaceState({}, document.title, window.location.pathname);

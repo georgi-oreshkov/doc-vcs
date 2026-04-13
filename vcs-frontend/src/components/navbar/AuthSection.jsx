@@ -4,7 +4,17 @@ import UserDropdown from "../UserDropdown";
 
 export default function AuthSection({ setView }) {
   const auth = useAuth();
+  
   const handleLogin = () => auth.signinRedirect();
+  
+  const handleRegister = () => {
+    auth.signinRedirect({
+      prompt: 'create',
+      extraQueryParams: { 
+        kc_action: 'register' 
+      }
+    });
+  };
 
   return (
     <NavbarContent justify="end">
@@ -16,7 +26,7 @@ export default function AuthSection({ setView }) {
             </Link>
           </NavbarItem>
           <NavbarItem className="hidden sm:flex">
-            <Button color="primary" variant="flat" onPress={handleLogin}>
+            <Button color="primary" variant="flat" onPress={() => handleRegister()}>
               Sign Up
             </Button>
           </NavbarItem>
