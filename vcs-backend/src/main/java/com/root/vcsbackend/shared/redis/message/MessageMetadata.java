@@ -6,10 +6,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
-import java.util.UUID;
 
 /**
- * Envelope shared by all Redis messages (both inbound tasks and outbound results).
+ * Envelope shared by all worker task messages published to Redis.
  * Mirrors the worker project's {@code MessageMetadata} contract.
  */
 @Data
@@ -18,7 +17,6 @@ import java.util.UUID;
 @AllArgsConstructor
 public class MessageMetadata {
 
-    private UUID correlationId;
     private Instant emittedAt;
     private String producer;
 

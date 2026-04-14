@@ -1,15 +1,12 @@
 package com.root.vcsbackendworker.shared.config;
 
 import com.root.vcsbackendworker.shared.db.VersionRow;
+import com.root.vcsbackendworker.shared.messaging.FailureReason;
 import com.root.vcsbackendworker.shared.messaging.MessageMetadata;
 import com.root.vcsbackendworker.shared.messaging.inbound.ReconstructTaskMessage;
 import com.root.vcsbackendworker.shared.messaging.inbound.VerifyTaskMessage;
 import com.root.vcsbackendworker.shared.messaging.inbound.WorkerTaskMessage;
 import com.root.vcsbackendworker.shared.messaging.inbound.WorkerTaskType;
-import com.root.vcsbackendworker.shared.messaging.outbound.FailureReason;
-import com.root.vcsbackendworker.shared.messaging.outbound.ProcessingStatus;
-import com.root.vcsbackendworker.shared.messaging.outbound.ReconstructionResultMessage;
-import com.root.vcsbackendworker.shared.messaging.outbound.VerificationResultMessage;
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.RuntimeHintsRegistrar;
@@ -37,20 +34,17 @@ public class WorkerRuntimeHints implements RuntimeHintsRegistrar {
 
     @Override
     public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
-        // Jackson-serialized inbound / outbound message types
+        // Jackson-serialized inbound message types
         Stream.of(
                 WorkerTaskMessage.class,
                 VerifyTaskMessage.class,
                 ReconstructTaskMessage.class,
-                MessageMetadata.class,
-                VerificationResultMessage.class,
-                ReconstructionResultMessage.class
+                MessageMetadata.class
         ).forEach(type -> hints.reflection().registerType(type, MemberCategory.values()));
 
         // Enums referenced in message DTOs — needed for Jackson enum deserialization
         Stream.of(
                 WorkerTaskType.class,
-                ProcessingStatus.class,
                 FailureReason.class
         ).forEach(type -> hints.reflection().registerType(type, MemberCategory.values()));
 
@@ -58,4 +52,3 @@ public class WorkerRuntimeHints implements RuntimeHintsRegistrar {
         hints.reflection().registerType(VersionRow.class, MemberCategory.values());
     }
 }
-

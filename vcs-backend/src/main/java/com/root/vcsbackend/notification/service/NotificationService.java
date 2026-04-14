@@ -4,7 +4,6 @@ import com.root.vcsbackend.notification.domain.NotificationDto;
 import com.root.vcsbackend.notification.domain.NotificationEntity;
 import com.root.vcsbackend.notification.api.NotificationEvent;
 import com.root.vcsbackend.notification.persistence.NotificationRepository;
-import com.root.vcsbackend.notification.sse.SseEmitterRegistry;
 import com.root.vcsbackend.shared.exception.AppException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
@@ -25,23 +24,21 @@ import java.util.stream.Collectors;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
-    private final SseEmitterRegistry sseEmitterRegistry;
 
     /**
      * Listens to ApplicationEvents from any module.
-     * Persists the notification then pushes it live over SSE if the user is connected.
+     * Persists the notification — SSE delivery is handled by
+     * {@link com.root.vcsbackend.notification.sse.PostgresNotificationListener}
+     * which reacts to the {@code pg_notify} trigger that fires after this
+     * transaction commits.
      */
     @EventListener
     public void onNotificationEvent(NotificationEvent event) {
-        NotificationEntity entity = NotificationEntity.builder()
+        notificationRepository.save(NotificationEntity.builder()
             .recipientId(event.getRecipientId())
             .type(event.getType())
             .payload(event.getPayload() != null ? event.getPayload().toString() : null)
-            .build();
-        notificationRepository.save(entity);
-
-        NotificationDto dto = NotificationDto.from(entity);
-        sseEmitterRegistry.send(event.getRecipientId(), dto);
+            .build());
     }
 
     @Transactional(readOnly = true)

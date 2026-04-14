@@ -26,7 +26,6 @@ public interface VersionMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "docId", source = "docId")
     @Mapping(target = "versionNumber", source = "nextVersionNumber")
-    @Mapping(target = "s3Key", source = "s3Key")
     @Mapping(target = "isDraft", source = "req.isDraft")
     @Mapping(target = "checksum", source = "req.checksum")
     @Mapping(target = "status", constant = "PENDING")
@@ -34,7 +33,7 @@ public interface VersionMapper {
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
-    VersionEntity toEntity(CreateVersionRequest req, UUID docId, int nextVersionNumber, String s3Key);
+    VersionEntity toEntity(CreateVersionRequest req, UUID docId, int nextVersionNumber);
 
     @Mapping(target = "createdAt", source = "createdAt", qualifiedByName = "instantToOffsetDateTime")
     Comment toCommentDto(CommentEntity entity);

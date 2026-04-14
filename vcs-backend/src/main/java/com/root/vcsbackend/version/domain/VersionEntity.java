@@ -43,8 +43,6 @@ public class VersionEntity extends BaseEntity {
     @Column
     private String checksum;
 
-    @Column(name = "s3_key", nullable = false)
-    private String s3Key;
 
     /**
      * How this version's content is persisted in S3.

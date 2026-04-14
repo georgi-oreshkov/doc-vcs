@@ -1,4 +1,4 @@
-package com.root.vcsbackendworker.verify.domain;
+package com.root.vcsbackendworker.shared.verify;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -22,18 +22,12 @@ public class ChecksumVerifier {
      */
     public boolean matches(byte[] bytes, String expectedChecksum) {
         String actual = sha256Hex(bytes);
-        boolean match = actual.equalsIgnoreCase(expectedChecksum);
-        if (match) {
-            log.debug("Checksum verified OK: {}", actual);
-        } else {
-            log.warn("Checksum mismatch — expected={} actual={}", expectedChecksum, actual);
-        }
-        return match;
+        return actual.equalsIgnoreCase(expectedChecksum);
     }
 
     /**
-     * Returns the SHA-256 hex digest of the given bytes.
-     * Exposed for use in tests and logging without the comparison step.
+     * Returns the SHA-256 hex digest of the given bytes
+     * Public only for testing
      */
     public String sha256Hex(byte[] bytes) {
         try {
