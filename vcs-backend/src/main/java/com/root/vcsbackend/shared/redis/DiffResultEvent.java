@@ -2,6 +2,7 @@ package com.root.vcsbackend.shared.redis;
 
 import com.root.vcsbackend.shared.redis.message.FailureReason;
 import com.root.vcsbackend.shared.redis.message.ProcessingStatus;
+import lombok.Getter;
 import org.springframework.context.ApplicationEvent;
 
 import java.util.UUID;
@@ -14,6 +15,7 @@ import java.util.UUID;
  * Lives in {@code shared} so that any module can listen for it without a
  * compile-time dependency on the listener itself.
  */
+@Getter
 public class DiffResultEvent extends ApplicationEvent {
 
     public enum ResultType { VERIFY, RECONSTRUCT }
@@ -54,14 +56,5 @@ public class DiffResultEvent extends ApplicationEvent {
         this.actualChecksum = actualChecksum;
     }
 
-    public ResultType getResultType()        { return resultType; }
-    public UUID getDocId()                   { return docId; }
-    public UUID getVersionId()               { return versionId; }
-    public UUID getCorrelationId()           { return correlationId; }
-    public UUID getRequestingUserId()        { return requestingUserId; }
-    public ProcessingStatus getStatus()      { return status; }
-    public FailureReason getFailureReason()  { return failureReason; }
-    public String getPresignedDownloadUrl()  { return presignedDownloadUrl; }
-    public String getActualChecksum()        { return actualChecksum; }
 }
 

@@ -1,5 +1,6 @@
 package com.root.vcsbackend.notification.api;
 
+import lombok.Getter;
 import org.springframework.context.ApplicationEvent;
 
 import java.util.UUID;
@@ -10,6 +11,7 @@ import java.util.UUID;
  * can be imported by any module without violating Modulith boundaries.
  * The notification module's @EventListener handles persistence + SSE push.
  */
+@Getter
 public class NotificationEvent extends ApplicationEvent {
 
     private final UUID recipientId;
@@ -23,8 +25,5 @@ public class NotificationEvent extends ApplicationEvent {
         this.payload = payload;
     }
 
-    public UUID getRecipientId() { return recipientId; }
-    public String getType()      { return type; }
-    public Object getPayload()   { return payload; }
 }
 

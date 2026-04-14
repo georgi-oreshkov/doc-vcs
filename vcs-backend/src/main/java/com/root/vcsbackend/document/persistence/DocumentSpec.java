@@ -12,24 +12,24 @@ public final class DocumentSpec {
     private DocumentSpec() {}
 
     public static Specification<DocumentEntity> hasOrgId(UUID orgId) {
-        return (root, query, cb) -> cb.equal(root.get("orgId"), orgId);
+        return (root, _, cb) -> cb.equal(root.get("orgId"), orgId);
     }
 
     public static Specification<DocumentEntity> hasCategoryId(UUID categoryId) {
-        return (root, query, cb) -> cb.equal(root.get("categoryId"), categoryId);
+        return (root, _, cb) -> cb.equal(root.get("categoryId"), categoryId);
     }
 
     public static Specification<DocumentEntity> hasAuthorId(UUID authorId) {
-        return (root, query, cb) -> cb.equal(root.get("authorId"), authorId);
+        return (root, _, cb) -> cb.equal(root.get("authorId"), authorId);
     }
 
     public static Specification<DocumentEntity> hasStatus(String status) {
         DocumentStatus s = DocumentStatus.valueOf(status.toUpperCase());
-        return (root, query, cb) -> cb.equal(root.get("status"), s);
+        return (root, _, cb) -> cb.equal(root.get("status"), s);
     }
 
     public static Specification<DocumentEntity> nameLike(String name) {
-        return (root, query, cb) ->
+        return (root, _, cb) ->
             cb.like(cb.lower(root.get("name")), "%" + name.toLowerCase() + "%");
     }
 }

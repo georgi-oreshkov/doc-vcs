@@ -1,20 +1,8 @@
 package com.root.vcsbackend.organization.domain;
 
 import com.root.vcsbackend.shared.domain.BaseEntity;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import jakarta.persistence.*;
+import lombok.*;
 
 import java.util.UUID;
 
@@ -44,7 +32,7 @@ public class OrgMembershipEntity extends BaseEntity {
     @Column(nullable = false)
     private OrgRole role;
 
-    /** Matches OpenAPI OrgUser.role enum exactly. */
+    /** Matches OpenAPI OrgUser.Role enum exactly. */
     public enum OrgRole {
         ADMIN, AUTHOR, REVIEWER, READER
     }

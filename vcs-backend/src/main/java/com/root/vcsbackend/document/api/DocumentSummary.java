@@ -12,11 +12,11 @@ import java.util.UUID;
  * <p>Fields exposed here are those legitimately needed by other modules:
  * <ul>
  *   <li>{@code id}                      — document identifier</li>
- *   <li>{@code orgId}                   — owning organisation (used for RBAC)</li>
+ *   <li>{@code orgId}                   — owning organization (used for RBAC)</li>
  *   <li>{@code authorId}                — creator (used for notifications)</li>
  *   <li>{@code name}                    — human-readable label</li>
- *   <li>{@code latestVersionId}         — current head version (may be null)</li>
- *   <li>{@code latestApprovedVersionId} — last approved version (may be null)</li>
+ *   <li>{@code latestVersionId}         — current head version (maybe null)</li>
+ *   <li>{@code latestApprovedVersionId} — last approved version (maybe null)</li>
  * </ul>
  */
 public record DocumentSummary(

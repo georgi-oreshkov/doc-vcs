@@ -17,7 +17,7 @@ import com.root.vcsbackend.version.service.VersionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;

@@ -1,7 +1,9 @@
 package com.root.vcsbackend.shared.exception;
 
+import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
+@Getter
 public class AppException extends RuntimeException {
 
     private final HttpStatus status;
@@ -16,8 +18,5 @@ public class AppException extends RuntimeException {
         this.status = status;
     }
 
-    public HttpStatus getStatus() {
-        return status;
-    }
 }
 

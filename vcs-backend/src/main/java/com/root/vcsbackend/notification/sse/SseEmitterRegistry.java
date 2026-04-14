@@ -7,7 +7,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -34,7 +33,7 @@ public class SseEmitterRegistry {
     public SseEmitter register(UUID userId) {
         SseEmitter emitter = new SseEmitter(Long.MAX_VALUE);
 
-        emitters.computeIfAbsent(userId, k -> new CopyOnWriteArrayList<>()).add(emitter);
+        emitters.computeIfAbsent(userId, _ -> new CopyOnWriteArrayList<>()).add(emitter);
 
         Runnable removeCallback = () -> {
             CopyOnWriteArrayList<SseEmitter> list = emitters.get(userId);
