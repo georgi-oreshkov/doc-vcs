@@ -1,12 +1,11 @@
 import { useAuth } from 'react-oidc-context';
 import { Dropdown, useDisclosure } from "@heroui/react";
 
-// Import our modular pieces
 import UserAvatarTrigger from "./user/UserAvatarTrigger";
 import UserMenuContent from "./user/UserMenuContent";
 import UpdatePhoto from "./UpdatePhoto";
 
-export default function UserDropdown({ setView }) {
+export default function UserDropdown() {
   const auth = useAuth();
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
 

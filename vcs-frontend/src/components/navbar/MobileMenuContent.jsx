@@ -1,18 +1,18 @@
 import { useAuth } from 'react-oidc-context';
 import { NavbarMenu, NavbarMenuItem, Link, Button } from "@heroui/react";
 
-export default function MobileMenuContent({ navItems, currentView, onNavigate }) {
+export default function MobileMenuContent({ navItems, currentPath, onNavigate }) {
   const auth = useAuth();
   const handleLogin = () => auth.signinRedirect();
 
   return (
     <NavbarMenu className="bg-black/95 pt-8 border-t border-zinc-800 backdrop-blur-xl">
       {navItems.map((item) => (
-        <NavbarMenuItem key={`${item.view}-mobile`}>
+        <NavbarMenuItem key={`${item.path}-mobile`}>
           <Link
             className="w-full text-white text-xl mb-4"
-            color={currentView === item.view ? "primary" : "foreground"}
-            onClick={() => onNavigate(item.view)}
+            color={currentPath === item.path || currentPath.startsWith(item.path + '/') ? "primary" : "foreground"}
+            onClick={() => onNavigate(item.path)}
             size="lg"
           >
             {item.label}

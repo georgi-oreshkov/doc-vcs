@@ -1,25 +1,24 @@
-import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Check } from 'lucide-react';
-import ApprovalCard from '../components/ApprovalCard'; // Import the new component
+import { Spinner } from "@heroui/react";
+import ApprovalCard from '../components/ApprovalCard';
+import { useRequests, useActionRequest } from '../hooks/useRequests';
 
-export default function ReviewerView({ setView, onSelectDoc }) {
-  const [requests, setRequests] = useState([
-    { id: 1, title: "Q3 Marketing Strategy", author: "Alice Smith", date: "2 hours ago", version: "v2.1", content: "Here is the detailed marketing strategy for Q3..." },
-    { id: 2, title: "API Documentation Update", author: "Bob Jones", date: "5 hours ago", version: "v1.4", content: "Updated the endpoints for the authentication service..." },
-    { id: 3, title: "Q4 Financial Projections", author: "Tony Reichert", date: "1 day ago", version: "v3.0", content: "Financial projections indicate a 15% growth..." },
-  ]);
+export default function ReviewerView() {
+  const navigate = useNavigate();
+  const { data: requests = [], isLoading, error } = useRequests({ status: 'PENDING' });
+  const actionReq = useActionRequest();
 
   const handleApprove = (id) => {
-    setRequests(requests.filter(req => req.id !== id));
+    actionReq.mutate({ requestId: id, data: { approve: true } });
   };
 
   const handleReject = (id) => {
-    setRequests(requests.filter(req => req.id !== id));
+    actionReq.mutate({ requestId: id, data: { approve: false } });
   };
 
   const handleViewDocument = (req) => {
-    onSelectDoc(req);
-    setView('viewer');
+    navigate(`/documents/${req.doc_id}`);
   };
 
   return (
@@ -29,7 +28,9 @@ export default function ReviewerView({ setView, onSelectDoc }) {
         <p className="text-zinc-400 text-sm">Review and approve document changes requested by your team.</p>
       </div>
 
-      {requests.length === 0 ? (
+      {isLoading ? (
+        <div className="flex justify-center py-20"><Spinner color="primary" size="lg" /></div>
+      ) : requests.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-zinc-500 bg-zinc-900/30 rounded-2xl border border-zinc-800/50">
           <Check size={48} className="mb-4 text-lime-500/50" />
           <p className="text-lg text-white">All caught up!</p>

@@ -2,7 +2,7 @@ import { useAuth } from 'react-oidc-context';
 import { NavbarContent, NavbarItem, Link, Button } from "@heroui/react";
 import UserDropdown from "../UserDropdown"; 
 
-export default function AuthSection({ setView }) {
+export default function AuthSection() {
   const auth = useAuth();
   
   const handleLogin = () => auth.signinRedirect();
@@ -33,7 +33,7 @@ export default function AuthSection({ setView }) {
         </>
       ) : (
         <NavbarItem>
-          <UserDropdown setView={setView} />
+          <UserDropdown />
         </NavbarItem>
       )}
     </NavbarContent>
