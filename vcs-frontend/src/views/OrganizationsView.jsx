@@ -1,31 +1,45 @@
 import { useState } from 'react';
-import { Input, Button, useDisclosure } from "@heroui/react";
+import { useNavigate } from 'react-router-dom';
+import { Input, Button, useDisclosure, Spinner } from "@heroui/react";
 import { Search, Plus } from 'lucide-react';
 import OrganizationCard from '../components/OrganizationCard';
 import OrganizationModal from '../components/OrganizationModal';
+import { useOrganizations, useCreateOrganization, useUpdateOrganization } from '../hooks/useOrganizations';
+import { useOrg } from '../context/OrgContext';
 
-export default function OrganizationsView({ setView }) {
+export default function OrganizationsView() {
+  const navigate = useNavigate();
+  const { setSelectedOrg } = useOrg();
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
   const [editingOrg, setEditingOrg] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const orgs = [
-    { id: 1, name: "Acme Corporation", members: 124, role: "admin", docs: 45 },
-    { id: 2, name: "OpenSource Labs", members: 3042, role: "author", docs: 128 },
-    { id: 3, name: "Project Phoenix", members: 8, role: "reviewer", docs: 12 },
-  ];
+  const { data: orgs = [], isLoading, error } = useOrganizations();
+  const createOrg = useCreateOrganization();
+  const updateOrg = useUpdateOrganization();
 
   const filteredOrgs = orgs.filter(o => o.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  // this function will be called both for creating a new org (with null) and for editing (with the org data)
   const handleOpenModal = (org = null) => {
     setEditingOrg(org);
     onOpen();
   };
 
+  const handleSaveOrg = (data, onClose) => {
+    if (editingOrg) {
+      updateOrg.mutate({ orgId: editingOrg.id, data }, { onSuccess: onClose });
+    } else {
+      createOrg.mutate(data, { onSuccess: onClose });
+    }
+  };
+
+  const handleSelectOrg = (org) => {
+    setSelectedOrg(org);
+    navigate(`/organizations/${org.id}/documents`);
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 w-full z-10 flex-grow">
-      {/* Header & Controls */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Organizations</h1>
@@ -46,22 +60,29 @@ export default function OrganizationsView({ setView }) {
         </div>
       </div>
 
-      {/* Grid with organization cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredOrgs.map(org => (
-          <OrganizationCard 
-            key={org.id} 
-            org={org} 
-            setView={setView} 
-            onOpenModal={handleOpenModal} 
-          />
-        ))}
-      </div>
+      {isLoading ? (
+        <div className="flex justify-center py-20"><Spinner color="primary" size="lg" /></div>
+      ) : error ? (
+        <p className="text-red-400 text-center py-20">Failed to load organizations.</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredOrgs.map(org => (
+            <OrganizationCard 
+              key={org.id} 
+              org={org} 
+              onSelect={handleSelectOrg} 
+              onOpenModal={handleOpenModal} 
+            />
+          ))}
+        </div>
+      )}
 
       <OrganizationModal 
         isOpen={isOpen} 
         onOpenChange={onOpenChange} 
-        editingOrg={editingOrg} 
+        editingOrg={editingOrg}
+        onSave={handleSaveOrg}
+        isSaving={createOrg.isPending || updateOrg.isPending}
       />
     </div>
   );

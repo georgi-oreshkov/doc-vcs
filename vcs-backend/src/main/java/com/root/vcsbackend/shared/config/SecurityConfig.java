@@ -3,6 +3,7 @@ package com.root.vcsbackend.shared.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import com.root.vcsbackend.shared.security.UserProfileSyncFilter;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -13,6 +14,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -23,6 +25,12 @@ import java.util.List;
 @EnableMethodSecurity
 @org.springframework.boot.context.properties.EnableConfigurationProperties(KeycloakProperties.class)
 public class SecurityConfig {
+
+    private final UserProfileSyncFilter userProfileSyncFilter;
+
+    public SecurityConfig(UserProfileSyncFilter userProfileSyncFilter) {
+        this.userProfileSyncFilter = userProfileSyncFilter;
+    }
 
     /**
      * Comma-separated list of allowed origins.
@@ -78,6 +86,7 @@ public class SecurityConfig {
             .oauth2ResourceServer(oauth2 -> oauth2
                 .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
             )
+            .addFilterAfter(userProfileSyncFilter, UsernamePasswordAuthenticationFilter.class)
             .build();
     }
 

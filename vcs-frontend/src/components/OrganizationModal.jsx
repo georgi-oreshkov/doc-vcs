@@ -1,7 +1,13 @@
+import { useState, useEffect } from 'react';
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button, Input, Textarea } from "@heroui/react";
 
-export default function OrganizationModal({ isOpen, onOpenChange, editingOrg }) {
+export default function OrganizationModal({ isOpen, onOpenChange, editingOrg, onSave, isSaving }) {
   const isEditing = !!editingOrg;
+  const [name, setName] = useState('');
+
+  useEffect(() => {
+    setName(editingOrg?.name || '');
+  }, [editingOrg]);
 
   return (
     <Modal 
@@ -25,13 +31,8 @@ export default function OrganizationModal({ isOpen, onOpenChange, editingOrg }) 
               <Input 
                 label="Organization Name" 
                 placeholder="e.g. OpenSource Labs" 
-                defaultValue={editingOrg?.name || ''} 
-                variant="bordered" 
-                classNames={{ inputWrapper: "border-zinc-700 text-white" }}
-              />
-              <Textarea 
-                label="Description" 
-                placeholder="Brief description of the workspace..." 
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 variant="bordered" 
                 classNames={{ inputWrapper: "border-zinc-700 text-white" }}
               />
@@ -40,7 +41,12 @@ export default function OrganizationModal({ isOpen, onOpenChange, editingOrg }) 
               <Button color="danger" variant="light" onPress={onClose}>
                 Cancel
               </Button>
-              <Button color="primary" onPress={onClose}>
+              <Button 
+                color="primary" 
+                onPress={() => onSave({ name }, onClose)}
+                isDisabled={!name.trim()}
+                isLoading={isSaving}
+              >
                 {isEditing ? "Save Changes" : "Create"}
               </Button>
             </ModalFooter>

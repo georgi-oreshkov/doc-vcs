@@ -1,28 +1,22 @@
-import { useEffect, useState } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from 'react-oidc-context'; 
 import AppNavbar from './components/AppNavbar';
+import ProtectedRoute from './components/ProtectedRoute';
 import LandingView from './views/LandingView';
 import OrganizationsView from './views/OrganizationsView';
 import DocumentsView from './views/DocumentsView';
 import DocumentViewerView from './views/DocumentViewerView';
 import ReviewerView from './views/ReviewerView';
-// import AdminPanelView from './views/AdminPanelView';
+
+function AuthRedirect({ children }) {
+  const auth = useAuth();
+  if (auth.isAuthenticated) return <Navigate to="/organizations" replace />;
+  return children;
+}
 
 export default function App() {
   const auth = useAuth(); 
-  
-  const [currentView, setCurrentView] = useState('landing'); 
-  const [selectedDoc, setSelectedDoc] = useState(null);
 
-  // --- THE BOUNCER LOGIC ---
-  useEffect(() => {
-    // We check the variable (currentView) and run the setter function (setCurrentView)
-    if (auth.isAuthenticated && currentView === 'landing') {
-      setCurrentView('organizations'); 
-    }
-  }, [auth.isAuthenticated, currentView]); 
-
-  // Show a loading screen while Keycloak checks if the user is already logged in
   if (auth.isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black text-lime-500 font-sans">
@@ -40,16 +34,18 @@ export default function App() {
         <div className="blob bg-emerald-600 w-[500px] h-[500px] top-[40%] right-[-10%] opacity-[0.05]" style={{animationDelay: '-5s'}}></div>
       </div>
 
-      <AppNavbar currentView={currentView} setView={setCurrentView} />
+      <AppNavbar />
 
-      {/* Simple Router */}
       <div className="relative z-10 flex-grow">
-        {currentView === 'landing' && <LandingView />}
-        {currentView === 'organizations' && <OrganizationsView setView={setCurrentView} />}
-        {currentView === 'documents' && <DocumentsView setView={setCurrentView} onSelectDoc={setSelectedDoc} />}
-        {currentView === 'viewer' && <DocumentViewerView setView={setCurrentView} doc={selectedDoc} />}
-        {currentView === 'reviewer' && <ReviewerView setView={setCurrentView} onSelectDoc={setSelectedDoc} />}
-        {/* {currentView === 'admin' && <AdminPanelView setView={setCurrentView} />} */}
+        <Routes>
+          <Route path="/" element={<AuthRedirect><LandingView /></AuthRedirect>} />
+          <Route path="/organizations" element={<ProtectedRoute><OrganizationsView /></ProtectedRoute>} />
+          <Route path="/organizations/:orgId/documents" element={<ProtectedRoute><DocumentsView /></ProtectedRoute>} />
+          <Route path="/documents/my" element={<ProtectedRoute><DocumentsView myDocs /></ProtectedRoute>} />
+          <Route path="/documents/:docId" element={<ProtectedRoute><DocumentViewerView /></ProtectedRoute>} />
+          <Route path="/reviews" element={<ProtectedRoute><ReviewerView /></ProtectedRoute>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </div>
      
       <footer className="border-t border-zinc-800 bg-black py-8 text-center text-zinc-500 text-sm mt-auto z-10 relative">

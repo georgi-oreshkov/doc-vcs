@@ -10,26 +10,29 @@ import {
 } from "@heroui/react";
 import { UploadCloud, FileText, X } from "lucide-react";
 
-export default function NewDocumentModal({ isOpen, onOpenChange }) {
+export default function NewDocumentModal({ isOpen, onOpenChange, onSave, isSaving }) {
     const [title, setTitle] = useState("");
     const [file, setFile] = useState(null);
     const fileInputRef = useRef(null);
 
-    // Функция за избиране на файл
     const handleFileChange = (e) => {
         if (e.target.files && e.target.files[0]) {
             setFile(e.target.files[0]);
         }
     };
 
-    // Function to handle saving the document (placeholder for now)
     const handleSave = (onClose) => {
-        console.log("Saving document:", { title, file });
-        // To-Do: Implement actual upload logic here (e.g., API call)
-
-        setTitle("");
-        setFile(null);
-        onClose();
+        if (onSave) {
+            onSave({ name: title }, file, () => {
+                setTitle("");
+                setFile(null);
+                onClose();
+            });
+        } else {
+            setTitle("");
+            setFile(null);
+            onClose();
+        }
     };
 
     return (
@@ -96,7 +99,7 @@ export default function NewDocumentModal({ isOpen, onOpenChange }) {
                             <Button color="primary" variant="light" onPress={onClose}>
                                 Cancel
                             </Button>
-                            <Button color="primary" onPress={() => handleSave(onClose)} isDisabled={!title || !file}>
+                            <Button color="primary" onPress={() => handleSave(onClose)} isDisabled={!title || !file} isLoading={isSaving}>
                                 Upload Document
                             </Button>
                         </ModalFooter>

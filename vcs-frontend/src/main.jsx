@@ -3,8 +3,22 @@ import ReactDOM from 'react-dom/client'
 import { HeroUIProvider } from "@heroui/react";
 import { AuthProvider } from 'react-oidc-context'
 import { WebStorageStateStore } from 'oidc-client-ts';
+import { BrowserRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { OrgProvider } from './context/OrgContext';
 import App from './App.jsx'
 import './index.css'
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 // Configuration for connecting to the local Keycloak server
 const oidcConfig = {
@@ -14,19 +28,27 @@ const oidcConfig = {
   post_logout_redirect_uri: window.location.origin,
   userStore: new WebStorageStateStore({ store: window.localStorage }),
   onSigninCallback: () => {
-    window.history.replaceState({}, document.title, window.location.pathname);
+    const returnTo = sessionStorage.getItem('returnTo') || '/';
+    sessionStorage.removeItem('returnTo');
+    window.history.replaceState({}, document.title, returnTo);
   }
 };
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    {/* We wrap the app in AuthProvider so every component knows if the user is logged in */}
     <AuthProvider {...oidcConfig}>
-      <HeroUIProvider>
-        <main className="dark text-foreground bg-background">
-          <App />
-        </main>
-      </HeroUIProvider>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <OrgProvider>
+            <HeroUIProvider>
+              <main className="dark text-foreground bg-background">
+                <App />
+              </main>
+            </HeroUIProvider>
+          </OrgProvider>
+        </BrowserRouter>
+        <ReactQueryDevtools initialIsOpen={false} />
+      </QueryClientProvider>
     </AuthProvider>
   </React.StrictMode>,
 )

@@ -1,16 +1,15 @@
 import { useState } from 'react';
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button, Avatar } from "@heroui/react";
 import { UploadCloud } from 'lucide-react';
+import { useUpdateProfile } from '../hooks/useUser';
 
 export default function UpdatePhoto({ isOpen, onOpenChange, currentPhotoUrl }) {
-  // Пазим локално избрания файл, за да го покажем като превю
   const [previewUrl, setPreviewUrl] = useState(null);
+  const updateProfile = useUpdateProfile();
 
-  // Функция, която се изпълнява при избор на файл
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Създаваме временен URL за превю на снимката
       setPreviewUrl(URL.createObjectURL(file));
     }
   };
@@ -53,9 +52,12 @@ export default function UpdatePhoto({ isOpen, onOpenChange, currentPhotoUrl }) {
               <Button color="danger" variant="light" onPress={onClose}>
                 Cancel
               </Button>
-              <Button color="primary" onPress={() => {
-                // save in db
-                onClose();
+              <Button color="primary" isLoading={updateProfile.isPending} onPress={() => {
+                if (previewUrl) {
+                  updateProfile.mutate({ photo_url: previewUrl }, { onSuccess: onClose });
+                } else {
+                  onClose();
+                }
               }}>
                 Save Photo
               </Button>
