@@ -4,15 +4,18 @@ import com.root.vcsbackend.api.OrganizationsApi;
 import com.root.vcsbackend.model.CreateOrganizationRequest;
 import com.root.vcsbackend.model.OrgUser;
 import com.root.vcsbackend.model.Organization;
+import com.root.vcsbackend.organization.domain.OrgMembershipEntity;
 import com.root.vcsbackend.organization.mapper.OrganizationMapper;
 import com.root.vcsbackend.organization.service.OrganizationService;
 import com.root.vcsbackend.shared.security.SecurityHelper;
+import com.root.vcsbackend.user.domain.UserProfileEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -43,8 +46,11 @@ public class OrganizationsController implements OrganizationsApi {
 
     @Override
     public ResponseEntity<List<OrgUser>> listOrgUsers(UUID orgId) {
-        List<OrgUser> users = organizationService.listOrgUsers(orgId).stream()
-            .map(organizationMapper::toOrgUserDto)
+        List<OrgMembershipEntity> memberships = organizationService.listOrgUsers(orgId);
+        List<UUID> userIds = memberships.stream().map(OrgMembershipEntity::getUserId).toList();
+        Map<UUID, UserProfileEntity> profiles = organizationService.resolveUserProfiles(userIds);
+        List<OrgUser> users = memberships.stream()
+            .map(m -> organizationMapper.toOrgUserDto(m, profiles.get(m.getUserId())))
             .toList();
         return ResponseEntity.ok(users);
     }
@@ -53,7 +59,7 @@ public class OrganizationsController implements OrganizationsApi {
     public ResponseEntity<List<Organization>> listOrganizations() {
         UUID callerId = securityHelper.currentUser().userId();
         List<Organization> orgs = organizationService.listOrganizations(callerId).stream()
-            .map(organizationMapper::toDto)
+            .map(owr -> organizationMapper.toDto(owr.org(), owr.role()))
             .toList();
         return ResponseEntity.ok(orgs);
     }

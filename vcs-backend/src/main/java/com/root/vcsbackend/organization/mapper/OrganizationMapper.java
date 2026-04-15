@@ -7,6 +7,7 @@ import com.root.vcsbackend.organization.domain.OrgMembershipEntity;
 import com.root.vcsbackend.organization.domain.OrgMembershipEntity.OrgRole;
 import com.root.vcsbackend.organization.domain.OrganizationEntity;
 import com.root.vcsbackend.shared.mapper.MapStructConfig;
+import com.root.vcsbackend.user.domain.UserProfileEntity;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.Named;
@@ -18,6 +19,12 @@ public interface OrganizationMapper {
 
     Organization toDto(OrganizationEntity entity);
 
+    default Organization toDto(OrganizationEntity entity, OrgRole role) {
+        Organization dto = toDto(entity);
+        dto.setMyRole(orgRoleToMyRole(role));
+        return dto;
+    }
+
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
@@ -26,7 +33,18 @@ public interface OrganizationMapper {
 
     @Mapping(target = "userId", source = "membership.userId")
     @Mapping(target = "role", source = "membership.role", qualifiedByName = "orgRoleToApi")
+    @Mapping(target = "name", ignore = true)
+    @Mapping(target = "email", ignore = true)
     OrgUser toOrgUserDto(OrgMembershipEntity membership);
+
+    default OrgUser toOrgUserDto(OrgMembershipEntity membership, UserProfileEntity profile) {
+        OrgUser dto = toOrgUserDto(membership);
+        if (profile != null) {
+            dto.setName(profile.getName());
+            dto.setEmail(profile.getEmail());
+        }
+        return dto;
+    }
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "orgId", source = "orgId")
@@ -42,5 +60,9 @@ public interface OrganizationMapper {
     @Named("apiRoleToOrgRole")
     default OrgRole apiRoleToOrgRole(OrgUser.RoleEnum roleEnum) {
         return OrgRole.valueOf(roleEnum.getValue());
+    }
+
+    default Organization.MyRoleEnum orgRoleToMyRole(OrgRole role) {
+        return Organization.MyRoleEnum.fromValue(role.name());
     }
 }

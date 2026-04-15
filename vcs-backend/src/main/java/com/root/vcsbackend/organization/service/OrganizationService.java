@@ -9,6 +9,8 @@ import com.root.vcsbackend.organization.mapper.OrganizationMapper;
 import com.root.vcsbackend.organization.persistence.OrgMembershipRepository;
 import com.root.vcsbackend.organization.persistence.OrganizationRepository;
 import com.root.vcsbackend.shared.exception.AppException;
+import com.root.vcsbackend.user.api.UserFacade;
+import com.root.vcsbackend.user.domain.UserProfileEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -16,7 +18,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -26,6 +31,7 @@ public class OrganizationService {
     private final OrganizationRepository organizationRepository;
     private final OrgMembershipRepository orgMembershipRepository;
     private final OrganizationMapper organizationMapper;
+    private final UserFacade userFacade;
 
     public OrganizationEntity createOrganization(CreateOrganizationRequest req, UUID callerId) {
         OrganizationEntity org = organizationMapper.toEntity(req);
@@ -56,21 +62,31 @@ public class OrganizationService {
 
     @Transactional(readOnly = true)
     @PreAuthorize("isAuthenticated()")
-    public List<OrganizationEntity> listOrganizations(UUID userId) {
-        List<UUID> orgIds = orgMembershipRepository.findByUserId(userId).stream()
-            .map(OrgMembershipEntity::getOrgId)
-            .toList();
-        if (orgIds.isEmpty()) {
+    public List<OrganizationService.OrgWithRole> listOrganizations(UUID userId) {
+        List<OrgMembershipEntity> memberships = orgMembershipRepository.findByUserId(userId);
+        if (memberships.isEmpty()) {
             return List.of();
         }
-        return organizationRepository.findAllById(orgIds);
+        Map<UUID, OrgMembershipEntity> membershipByOrgId = memberships.stream()
+            .collect(Collectors.toMap(OrgMembershipEntity::getOrgId, Function.identity()));
+        List<OrganizationEntity> orgs = organizationRepository.findAllById(membershipByOrgId.keySet());
+        return orgs.stream()
+            .map(org -> new OrgWithRole(org, membershipByOrgId.get(org.getId()).getRole()))
+            .toList();
     }
+
+    public record OrgWithRole(OrganizationEntity org, OrgRole role) {}
 
     @Transactional(readOnly = true)
     @PreAuthorize("@orgRoleEvaluator.hasRole(#orgId, authentication, 'ADMIN', 'AUTHOR', 'REVIEWER', 'READER')")
     public List<OrgMembershipEntity> listOrgUsers(UUID orgId) {
         resolve(orgId); // verify org exists
         return orgMembershipRepository.findByOrgId(orgId);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<UUID, UserProfileEntity> resolveUserProfiles(List<UUID> userIds) {
+        return userFacade.resolveUsers(userIds);
     }
 
     @PreAuthorize("@orgRoleEvaluator.hasRole(#orgId, authentication, 'ADMIN')")
