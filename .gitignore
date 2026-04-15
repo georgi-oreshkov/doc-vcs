@@ -26,3 +26,7 @@ replay_pid*
 # env files
 .env
 
+# IDE configs
+.idea
+.vscode
+

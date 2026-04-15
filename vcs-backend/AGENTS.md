@@ -61,7 +61,13 @@ Generated model classes (e.g., `Document`, `CreateDocumentRequest`) live in `com
   @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
   ```
 - Org roles: `ADMIN`, `AUTHOR`, `REVIEWER`, `READER` (stored in `org_memberships`).
-- SSE `/notifications/stream` is `permitAll` — EventSource API cannot set headers.
+- `permitAll` endpoints: `/notifications/stream` (EventSource cannot set headers), `/auth/login` (OAuth2 redirect entry-point), `/actuator/health`.
+- **`SecurityHelper`** — inject when you need the current user inside an `@Override` method on a generated API interface (cannot add `@CurrentUser` as an extra parameter on `@Override`):
+  ```java
+  @Autowired SecurityHelper securityHelper;
+  JwtPrincipal principal = securityHelper.currentUser(); // throws 401 AppException if unauthenticated
+  ```
+- **`AuthController`** (`shared/web/`) — handwritten `GET /auth/login` redirect; builds the Keycloak Authorization Code URL from `KC_ISSUER_URI`, `KC_CLIENT_ID`, `KC_REDIRECT_URI` and returns `302 Found`.
 
 ---
 
@@ -99,7 +105,7 @@ public interface DocumentMapper { ... }
 events.publishEvent(new NotificationEvent(this, recipientId, "VERSION_APPROVED", payload));
 ```
 
-`NotificationService` (`@EventListener`) persists to DB. Worker-originated notifications are inserted directly by the worker (no `NotificationEvent` needed).
+`NotificationEvent` lives in `notification/api/` (a `@NamedInterface`), so any module can import it without violating Modulith boundaries. `NotificationService` (`@EventListener`) persists to DB.
 
 **SSE delivery:** A PostgreSQL `AFTER INSERT` trigger on `notifications` fires `pg_notify('vcs_notification_inserted', {...})` after each transaction commits. `PostgresNotificationListener` maintains a dedicated (non-pooled) `LISTEN` connection on a virtual thread and dispatches to `SseEmitterRegistry.send()`. This is the **single, uniform SSE delivery path** for all notification sources (backend services, worker, direct SQL).
 
@@ -145,9 +151,23 @@ Config: `app.redis.diff-jobs-stream` (env: `WORKER_STREAM`).
 
 ## S3 / File Upload Flow
 
+`S3KeyTemplates` (`shared/s3/`) derives all S3 keys deterministically from `(docId, versionNumber)` — no key is stored in the DB:
+
+| Template method | S3 key pattern | Use |
+|---|---|---|
+| `permanentVersion(docId, n)` | `documents/{docId}/v{n}` | Full snapshot or DIFF stored permanently |
+| `stagingDiff(docId, n)` | `tmp/{docId}/v{n}.diff` | Diff awaiting worker verification |
+| `tempReconstruction(docId, n)` | `tmp/{docId}/v{n}` | Worker-assembled full doc for download |
+
+**Upload flow:**
 1. Client calls `POST /documents` or `POST /versions` → service generates a presigned PUT URL via `S3PresignService.generateUploadUrl(s3Key)`.
 2. Controller returns `S3UploadResponse` with the presigned URL; client uploads the file directly.
-3. `S3PresignService` methods are `@Retryable` (3 attempts, exponential back-off). Config via `S3Properties` (`app.s3.*`).
+
+**Download flow — `StorageType` matters:**
+- `SNAPSHOT` — `generateDownloadUrl(permanentVersion(…))` returns a presigned GET URL immediately.
+- `DIFF` — the same presigned GET URL is returned (pointing at the raw diff), **and** a `RECONSTRUCT_DOCUMENT` task is published to Redis so the worker assembles the full document. The reconstructed presigned URL arrives via SSE (`DOCUMENT_RECONSTRUCTED` notification).
+
+`S3PresignService` methods (`generateUploadUrl`, `generateDownloadUrl`) are both `@Retryable` (3 attempts, exponential back-off). Config via `S3Properties` (`app.s3.*`).
 
 ---
 
@@ -157,11 +177,18 @@ Config: `app.redis.diff-jobs-stream` (env: `WORKER_STREAM`).
 |---|---|---|
 | `DB_HOST` / `DB_PORT` / `DB_NAME` | `localhost/5432/vcs_db` | PostgreSQL |
 | `DB_USER` / `DB_PASSWORD` | `app_user/secret` | PostgreSQL credentials |
-| `KC_ISSUER_URI` | `http://localhost:8080/realms/vcs` | Keycloak JWT issuer |
-| `S3_ENDPOINT` / `S3_BUCKET` | `http://localhost:9000/vcs-documents` | MinIO/S3 |
+| `KC_ISSUER_URI` | `http://localhost:18080/realms/vcs` | Keycloak JWT issuer (must match `iss` claim) |
+| `KC_JWK_SET_URI` | *(derived from issuer-uri)* | JWKS endpoint — override for Docker where backend fetches keys via `http://keycloak:8080` but issuer stays at public URL |
+| `KC_CLIENT_ID` | `vcs-frontend` | Keycloak client ID used by `/auth/login` redirect |
+| `KC_REDIRECT_URI` | `http://localhost:5173/callback` | Frontend OAuth2 callback URL |
+| `S3_ENDPOINT` | `http://localhost:19000` | MinIO/S3 endpoint |
+| `S3_BUCKET` | `vcs-documents` | S3 bucket name |
 | `S3_ACCESS_KEY` / `S3_SECRET_KEY` | `minioadmin/minioadmin` | MinIO credentials |
+| `S3_REGION` | `eu-central-1` | Cosmetic for MinIO; must match real AWS region if switched |
+| `S3_PRESIGN_MINUTES` | `15` | Presigned URL validity duration |
 | `REDIS_HOST` / `REDIS_PORT` | `localhost/16379` | Redis |
 | `WORKER_STREAM` | `vcs.diff.jobs` | Redis Stream: backend → worker tasks |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | Comma-separated allowed CORS origins |
 
 ---
 
@@ -174,9 +201,13 @@ Config: `app.redis.diff-jobs-stream` (env: `WORKER_STREAM`).
 | `src/main/resources/db/migration/V1__init_schema.sql` | Canonical Flyway baseline |
 | `src/main/java/.../shared/config/SecurityConfig.java` | Filter chain, JWT converter, permit-all rules |
 | `src/main/java/.../shared/security/OrgRoleEvaluator.java` | SpEL security evaluator used in `@PreAuthorize` |
+| `src/main/java/.../shared/security/SecurityHelper.java` | Resolves current user from SecurityContext; use in `@Override` controller methods |
 | `src/main/java/.../shared/mapper/MapStructConfig.java` | Global MapStruct config (read the Javadoc) |
 | `src/main/java/.../shared/redis/DiffTaskPublisher.java` | Publishes verify/reconstruct tasks to worker via Redis (fire-and-forget) |
 | `src/main/java/.../shared/redis/message/` | Task message DTOs mirroring the worker's inbound contract |
+| `src/main/java/.../shared/s3/S3KeyTemplates.java` | Deterministic S3 key derivation from `(docId, versionNumber)` |
+| `src/main/java/.../shared/web/AuthController.java` | Handwritten `GET /auth/login` OAuth2 redirect; not generated from OpenAPI spec |
+| `src/main/java/.../notification/api/NotificationEvent.java` | Cross-module notification contract (`@NamedInterface`) |
 | `src/main/java/.../notification/sse/PostgresNotificationListener.java` | Dedicated LISTEN connection; dispatches pg_notify events to SseEmitterRegistry |
-| `src/main/java/.../notification/domain/NotificationEvent.java` | Cross-module notification contract |
+| `src/test/java/.../TestSecurityConfig.java` | Stub `JwtDecoder` for tests — import with `@Import(TestSecurityConfig.class)` + `@ActiveProfiles("test")` |
 

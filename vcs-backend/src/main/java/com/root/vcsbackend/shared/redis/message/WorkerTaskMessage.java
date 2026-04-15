@@ -34,9 +34,8 @@ public abstract class WorkerTaskMessage {
     private MessageMetadata metadata;
     private WorkerTaskType taskType;
     private UUID docId;
-    private UUID versionId;
 
-    /** SHA-256 checksum of the expected new full document after applying the diff. */
+    // SHA-256 checksum of the expected new full document after applying the diff.
     private String expectedChecksum;
 
     /**
@@ -45,5 +44,6 @@ public abstract class WorkerTaskMessage {
      * {@code notifications} table, so no correlation cache is needed on the backend.
      */
     private UUID recipientId;
+    private UUID versionId;
 }
 

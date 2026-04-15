@@ -67,8 +67,11 @@ public class VersionsController implements VersionsApi {
     @Override
     public ResponseEntity<GetVersionDownloadUrl200Response> getVersionDownloadUrl(UUID docId, UUID versionId) {
         UUID callerId = securityHelper.currentUser().userId();
-        return ResponseEntity.ok(versionService.getDownloadUrl(docId, versionId, callerId));
+        var result = versionService.getDownloadUrl(docId, versionId, callerId);
+        HttpStatus status = result.reconstructionDispatched() ? HttpStatus.ACCEPTED : HttpStatus.OK;
+        return ResponseEntity.status(status).body(result.response());
     }
+
 
     @Override
     public ResponseEntity<List<Comment>> listComments(UUID docId, UUID versionId) {
