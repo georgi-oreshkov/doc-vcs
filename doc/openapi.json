@@ -1332,13 +1332,17 @@
                 "type": "object",
                 "required": [
                   "checksum",
-                  "is_draft"
+                  "is_draft",
+                  "is_diff"
                 ],
                 "properties": {
                   "checksum": {
                     "type": "string"
                   },
                   "is_draft": {
+                    "type": "boolean"
+                  },
+                  "is_diff": {
                     "type": "boolean"
                   }
                 }
