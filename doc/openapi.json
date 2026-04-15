@@ -1534,6 +1534,10 @@
               }
             }
           },
+          "201" : {
+            "description": "Wait for notification with download URL",
+            "content" : {}
+          },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },

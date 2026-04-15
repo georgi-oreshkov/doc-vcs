@@ -120,15 +120,15 @@ public class PostgresNotificationListener implements InitializingBean, Disposabl
     private void dispatch(String json) {
         try {
             JsonNode node = jsonMapper.readTree(json);
-            UUID recipientId = UUID.fromString(node.get("recipientId").textValue());
+            UUID recipientId = UUID.fromString(node.get("recipientId").asString());
 
             NotificationDto dto = new NotificationDto(
-                    UUID.fromString(node.get("id").textValue()),
+                    UUID.fromString(node.get("id").asString()),
                     recipientId,
-                    node.get("type").textValue(),
+                    node.get("type").asString(),
                     node.has("payload") && !node.get("payload").isNull()
                             ? node.get("payload").toString() : null,
-                    Instant.parse(node.get("createdAt").textValue()),
+                    Instant.parse(node.get("createdAt").asString()),
                     null   // always null on INSERT
             );
 
