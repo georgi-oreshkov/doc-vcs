@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Navbar, NavbarContent, NavbarMenuToggle } from "@heroui/react";
@@ -7,8 +7,9 @@ import NavLogo from "./navbar/NavLogo";
 import DesktopLinks from "./navbar/DesktopLinks";
 import AuthSection from "./navbar/AuthSection";
 import MobileMenuContent from "./navbar/MobileMenuContent";
+import { useOrg } from '../context/OrgContext';
 
-export const NAV_ITEMS = [
+const BASE_NAV_ITEMS = [
   { label: "Organizations", path: "/organizations" },
   { label: "My Documents", path: "/documents/my" },
   { label: "Approvals", path: "/reviews" },
@@ -19,6 +20,17 @@ export default function AppNavbar() {
   const auth = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { selectedOrg, activeRole } = useOrg();
+
+  const navItems = useMemo(() => {
+    if (selectedOrg && activeRole === 'ADMIN') {
+      return [
+        ...BASE_NAV_ITEMS,
+        { label: "Admin", path: `/organizations/${selectedOrg.id}/admin` },
+      ];
+    }
+    return BASE_NAV_ITEMS;
+  }, [selectedOrg, activeRole]);
 
   const handleNavigation = (path) => {
     navigate(path);
@@ -41,7 +53,7 @@ export default function AppNavbar() {
       </NavbarContent>
 
       <DesktopLinks 
-        navItems={NAV_ITEMS} 
+        navItems={navItems} 
         currentPath={location.pathname} 
         onNavigate={handleNavigation} 
       />
@@ -49,7 +61,7 @@ export default function AppNavbar() {
       <AuthSection />
 
       <MobileMenuContent 
-        navItems={NAV_ITEMS} 
+        navItems={navItems} 
         currentPath={location.pathname} 
         onNavigate={handleNavigation} 
       />
