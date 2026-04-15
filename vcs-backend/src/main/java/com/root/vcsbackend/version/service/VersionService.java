@@ -204,7 +204,7 @@ public class VersionService {
      *   <li><b>SNAPSHOT</b> — a presigned download URL is generated directly.</li>
      *   <li><b>DIFF</b> — an async reconstruction is triggered via Redis so the
      *       worker assembles the full document. The presigned URL will arrive via
-     *       SSE ({@code DOCUMENT_RECONSTRUCTED}). Meanwhile the raw diff URL is
+     *       SSE ({@code DOCUMENT_RECONSTRUCTED}). Meanwhile, the raw diff URL is
      *       returned.</li>
      * </ul>
      * The {@code diff} field in the response contains a JSON object with
