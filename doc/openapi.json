@@ -1534,7 +1534,7 @@
               }
             }
           },
-          "201" : {
+          "202" : {
             "description": "Wait for notification with download URL",
             "content" : {}
           },

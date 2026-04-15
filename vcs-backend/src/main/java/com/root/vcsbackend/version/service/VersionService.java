@@ -157,26 +157,6 @@ public class VersionService {
     }
 
     /**
-     * Publishes a reconstruct task to the worker so it assembles the full document
-     * at the given version from snapshot + diffs, uploads it to a temp S3 key,
-     * and returns a presigned download URL via Redis → SSE.
-     */
-    @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
-    public void requestReconstruct(UUID docId, UUID versionId, UUID callerId) {
-        VersionEntity version = resolveAndValidate(docId, versionId);
-
-        diffTaskPublisher.publish(
-                ReconstructTaskMessage.builder()
-                        .taskType(WorkerTaskType.RECONSTRUCT_DOCUMENT)
-                        .docId(docId)
-                        .versionId(versionId)
-                        .recipientId(callerId)
-                        .expectedChecksum(version.getChecksum())
-                        .targetVersionNumber(version.getVersionNumber())
-                        .build());
-    }
-
-    /**
      * Returns a presigned download URL for the version's content.
      * <p>
      * If the version is stored as a full {@code SNAPSHOT}, the URL points to the
@@ -189,10 +169,11 @@ public class VersionService {
      */
     @Transactional(readOnly = true)
     @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
-    public GetVersionDownloadUrl200Response getDownloadUrl(UUID docId, UUID versionId, UUID callerId) {
+    public DownloadUrlResult getDownloadUrl(UUID docId, UUID versionId, UUID callerId) {
         VersionEntity version = resolveAndValidate(docId, versionId);
 
-        if (version.getStorageType() == StorageType.DIFF) {
+        boolean reconstructionDispatched = version.getStorageType() == StorageType.DIFF;
+        if (reconstructionDispatched) {
             diffTaskPublisher.publish(
                     ReconstructTaskMessage.builder()
                             .taskType(WorkerTaskType.RECONSTRUCT_DOCUMENT)
@@ -204,11 +185,16 @@ public class VersionService {
                             .build());
         }
 
-        return new GetVersionDownloadUrl200Response()
-            .downloadUrl(java.net.URI.create(
-                s3PresignService.generateDownloadUrl(
-                    S3KeyTemplates.permanentVersion(docId, version.getVersionNumber()))));
+        var response = new GetVersionDownloadUrl200Response()
+                .downloadUrl(reconstructionDispatched?
+                        java.net.URI.create(""):
+                        java.net.URI.create(
+                        s3PresignService.generateDownloadUrl(
+                                S3KeyTemplates.permanentVersion(docId, version.getVersionNumber()))));
+
+        return new DownloadUrlResult(response, reconstructionDispatched);
     }
+
 
     /**
      * Computes a diff response between two versions of the same document.
