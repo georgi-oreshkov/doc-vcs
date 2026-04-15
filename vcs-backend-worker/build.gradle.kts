@@ -57,7 +57,11 @@ graalvmNative {
                 "--no-fallback",
                 // Initialise SLF4J/Logback at build time to avoid runtime class-init issues
                 "--initialize-at-build-time=org.slf4j,ch.qos.logback",
-                "-H:+ReportExceptionStackTraces"
+                "-H:+ReportExceptionStackTraces",
+                // Give the native-image compiler JVM more heap. The native-image process is
+                // separate from the Gradle daemon, so org.gradle.jvmargs doesn't cover it.
+                // 4 GB avoids GC pressure during the static analysis phase.
+                "-J-Xmx4g"
             )
         }
     }

@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # ── Stage 1: Build native image ─────────────────────────────────────────────
 # GraalVM Community 25 ships native-image; matches the Java 25 project toolchain.
 FROM ghcr.io/graalvm/native-image-community:25 AS builder
@@ -8,13 +9,18 @@ WORKDIR /workspace
 # only invalidated when build files change, not on every source edit.
 COPY gradlew gradlew.bat ./
 COPY gradle/ gradle/
+COPY gradle.properties ./
 COPY build.gradle.kts settings.gradle.kts ./
 
-RUN chmod +x gradlew && ./gradlew dependencies --no-daemon -q
+# --mount=type=cache persists the Gradle dependency cache on the host across
+# Docker builds so dependencies are only downloaded on the very first build.
+RUN --mount=type=cache,target=/root/.gradle,id=gradle-worker,sharing=locked \
+    chmod +x gradlew && ./gradlew dependencies --no-daemon -q
 
 # Now copy source and compile the native binary.
 COPY src/ src/
-RUN ./gradlew nativeCompile --no-daemon
+RUN --mount=type=cache,target=/root/.gradle,id=gradle-worker,sharing=locked \
+    ./gradlew nativeCompile --no-daemon
 
 # ── Stage 2: Minimal runtime image ──────────────────────────────────────────
 # distroless/base provides glibc (required by GraalVM's default dynamic linking)

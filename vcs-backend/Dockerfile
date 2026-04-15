@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # ── Stage 1: Build ───────────────────────────────────────────────────────────
 # Build context MUST be the repo root (doc-vcs/) so that ../doc/openapi.json
 # is reachable by the openApiGenerate Gradle task ($rootDir/../doc/openapi.json).
@@ -15,21 +16,27 @@ WORKDIR /workspace
 # This layer is only invalidated when build config changes, not on source edits.
 COPY vcs-backend/gradlew vcs-backend/gradlew.bat ./
 COPY vcs-backend/gradle/ gradle/
+COPY vcs-backend/gradle.properties ./
 COPY vcs-backend/build.gradle.kts vcs-backend/settings.gradle.kts ./
 
-RUN chmod +x gradlew
+# Pre-download all dependencies (cached as long as build files don't change).
+# chmod is inlined here to avoid a throwaway extra layer.
+# --mount=type=cache persists the Gradle dependency cache on the host across
+# Docker builds, so dependencies are only downloaded on the very first build.
+RUN --mount=type=cache,target=/root/.gradle,id=gradle-backend,sharing=locked \
+    chmod +x gradlew && ./gradlew dependencies --no-daemon -q
 
 # openApiGenerate reads inputSpec = "$rootDir/../doc/openapi.json"
 # With WORKDIR=/workspace, $rootDir=/workspace, so ../doc = /doc.
+# Copied AFTER the dependency layer so openapi.json edits don't bust the
+# dependency-download cache.
 COPY doc/openapi.json /doc/openapi.json
-
-# Pre-download all dependencies (cached as long as build files don't change).
-RUN ./gradlew dependencies --no-daemon -q
 
 # Copy source and build the executable fat jar; skip tests (run separately in CI).
 COPY vcs-backend/src/ src/
 
-RUN ./gradlew bootJar --no-daemon -x test
+RUN --mount=type=cache,target=/root/.gradle,id=gradle-backend,sharing=locked \
+    ./gradlew bootJar --no-daemon -x test
 
 # ── Stage 2: Runtime ─────────────────────────────────────────────────────────
 # Slim JRE image — no compiler, no dev tools.

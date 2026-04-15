@@ -87,7 +87,7 @@ services:
         condition: service_healthy
 
   vcs-backend:
-    image: vcs-backend:latest
+    image: ghcr.io/georgi-oreshkov/doc-vcs/vcs-backend:latest
     build:
       # Context is the repo root so vcs-backend/Dockerfile can COPY doc/openapi.json
       context: .
@@ -139,7 +139,7 @@ services:
         condition: service_started
 
   vcs-backend-worker:
-    image: vcs-backend-worker:latest
+    image: ghcr.io/georgi-oreshkov/doc-vcs/vcs-backend-worker:latest
     build:
       context: ./vcs-backend-worker
       dockerfile: Dockerfile
