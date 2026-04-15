@@ -87,7 +87,7 @@ class VerifyDiffUseCaseTest {
         verify(s3).moveObject(STAGING_KEY, PERMANENT_KEY);
         verify(s3).uploadBytes(RECONSTRUCT_KEY, RESULT_BYTES);
         verify(notificationWriteGateway).recordVerificationSuccess(
-                RECIPIENT_ID, DOC_ID, VERSION_ID, CHECKSUM, NEW_VERSION);
+                RECIPIENT_ID, DOC_ID, VERSION_ID, NEW_VERSION);
     }
 
     // ── happy path — previous version is DIFF (triggers reconstruction) ────────
@@ -105,7 +105,7 @@ class VerifyDiffUseCaseTest {
         verify(reconstructor).reconstruct(DOC_ID, PREV_VERSION, PREV_CHECKSUM);
         verify(s3).moveObject(STAGING_KEY, PERMANENT_KEY);
         verify(notificationWriteGateway).recordVerificationSuccess(
-                RECIPIENT_ID, DOC_ID, VERSION_ID, CHECKSUM, NEW_VERSION);
+                RECIPIENT_ID, DOC_ID, VERSION_ID, NEW_VERSION);
     }
 
     // ── previous version lookup failures ───────────────────────────────────────
@@ -238,7 +238,7 @@ class VerifyDiffUseCaseTest {
 
         verify(notificationWriteGateway).recordFailure(RECIPIENT_ID, DOC_ID, VERSION_ID,
                 "VERIFY_DIFF", FailureReason.STORAGE_ERROR);
-        verify(notificationWriteGateway, never()).recordVerificationSuccess(any(), any(), any(), any(), any());
+        verify(notificationWriteGateway, never()).recordVerificationSuccess(any(), any(), any(), any());
     }
 
     // ── cache upload failure is non-fatal ──────────────────────────────────────
@@ -256,7 +256,7 @@ class VerifyDiffUseCaseTest {
 
         verify(s3).moveObject(STAGING_KEY, PERMANENT_KEY);
         verify(notificationWriteGateway).recordVerificationSuccess(
-                RECIPIENT_ID, DOC_ID, VERSION_ID, CHECKSUM, NEW_VERSION);
+                RECIPIENT_ID, DOC_ID, VERSION_ID, NEW_VERSION);
     }
 
     // ── early return guarantees ────────────────────────────────────────────────
@@ -269,7 +269,7 @@ class VerifyDiffUseCaseTest {
         useCase.handle(validTask);
 
         verify(notificationWriteGateway, times(1)).recordFailure(any(), any(), any(), any(), any());
-        verify(notificationWriteGateway, never()).recordVerificationSuccess(any(), any(), any(), any(), any());
+        verify(notificationWriteGateway, never()).recordVerificationSuccess(any(), any(), any(), any());
     }
 
     // ── helpers ────────────────────────────────────────────────────────────────

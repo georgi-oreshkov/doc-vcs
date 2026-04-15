@@ -22,7 +22,9 @@ import com.root.vcsbackend.version.domain.VersionStatus;
 import com.root.vcsbackend.version.mapper.VersionMapper;
 import com.root.vcsbackend.version.persistence.CommentRepository;
 import com.root.vcsbackend.version.persistence.VersionRepository;
+import com.root.vcsbackend.version.web.MinioWebhookController;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -36,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @Transactional
 @RequiredArgsConstructor
@@ -53,7 +56,7 @@ public class VersionService {
     private final DiffTaskPublisher diffTaskPublisher;
 
     @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
-    public S3UploadResponse createVersion(UUID docId, CreateVersionRequest req, UUID callerId) {
+    public S3UploadResponse createVersion(UUID docId, CreateVersionRequest req) {
         documentFacade.requireExists(docId);
 
         int nextNumber = versionRepository.findTopByDocIdOrderByVersionNumberDesc(docId)
@@ -68,23 +71,8 @@ public class VersionService {
         // Submitting a non-draft version puts the document into review
         if (Boolean.FALSE.equals(version.getIsDraft())) {
             documentFacade.updateStatusToPendingReview(docId);
-
-            // If the request carries a checksum and a previous version exists,
-            // ask the worker to verify the diff against the previous version.
-            if (hasPreviousVersion(docId, nextNumber) && req.getChecksum() != null) {
-                diffTaskPublisher.publish(
-                        VerifyTaskMessage.builder()
-                                .taskType(WorkerTaskType.VERIFY_DIFF)
-                                .docId(docId)
-                                .versionId(version.getId())
-                                .recipientId(callerId)
-                                .expectedChecksum(req.getChecksum())
-                                .newVersionNumber(nextNumber)
-                                .build());
-            }
         }
-
-        String s3Key = S3KeyTemplates.permanentVersion(docId, nextNumber);
+        String s3Key = (nextNumber > 1 && req.getIsDiff())? S3KeyTemplates.stagingDiff(docId,nextNumber) : S3KeyTemplates.permanentVersion(docId, nextNumber);
         return new S3UploadResponse().uploadUrl(java.net.URI.create(s3PresignService.generateUploadUrl(s3Key)));
     }
 
@@ -155,6 +143,44 @@ public class VersionService {
         resolveAndValidate(docId, versionId);
         return commentRepository.findByVersionIdOrderByCreatedAtAsc(versionId);
     }
+
+    /**
+     * Called by {@link MinioWebhookController} after a staging diff file lands in S3.
+     * Publishes a {@code VERIFY_DIFF} task so the worker validates the diff's checksum
+     * and moves the file to the permanent key on success.
+     */
+    @Transactional(readOnly = true)
+    public void handleStagingDiffUploaded(UUID docId, int versionNumber) {
+        VersionEntity version = versionRepository.findByDocIdAndVersionNumber(docId, versionNumber)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND,
+                        "Version not found: docId=%s versionNumber=%d".formatted(docId, versionNumber)));
+
+        if (version.getStorageType() != StorageType.DIFF) {
+            log.warn("Staging-diff webhook fired for non-DIFF version — ignoring: docId={}, versionNumber={}",
+                    docId, versionNumber);
+            return;
+        }
+
+        if (version.getCreatedBy() == null) {
+            log.warn("Version has no createdBy, cannot determine recipient: docId={}, versionId={}",
+                    docId, version.getId());
+            return;
+        }
+
+        diffTaskPublisher.publish(
+                VerifyTaskMessage.builder()
+                        .taskType(WorkerTaskType.VERIFY_DIFF)
+                        .docId(docId)
+                        .versionId(version.getId())
+                        .recipientId(version.getCreatedBy())
+                        .expectedChecksum(version.getChecksum())
+                        .newVersionNumber(versionNumber)
+                        .build());
+
+        log.debug("VERIFY_DIFF task published: docId={}, versionId={}, versionNumber={}",
+                docId, version.getId(), versionNumber);
+    }
+
 
     /**
      * Returns a presigned download URL for the version's content.
@@ -274,16 +300,6 @@ public class VersionService {
         }
         return s3PresignService.generateDownloadUrl(
                 S3KeyTemplates.permanentVersion(docId, version.getVersionNumber()));
-    }
-
-    /**
-     * Returns {@code true} if there is at least one version before {@code currentNumber}
-     * for the given document.
-     */
-    private boolean hasPreviousVersion(UUID docId, int currentNumber) {
-        if (currentNumber <= 1) return false;
-        return versionRepository.findTopByDocIdAndVersionNumberLessThanOrderByVersionNumberDesc(docId, currentNumber)
-                .isPresent();
     }
 
     private VersionEntity resolveAndValidate(UUID docId, UUID versionId) {

@@ -119,7 +119,7 @@ public class VerifyDiffUseCase {
 
         // 7. Update version checksum + insert notification (single DB transaction)
         notificationWriteGateway.recordVerificationSuccess(
-                task.getRecipientId(), task.getDocId(), task.getVersionId(), task.getExpectedChecksum(), task.getNewVersionNumber());
+                task.getRecipientId(), task.getDocId(), task.getVersionId(), task.getNewVersionNumber());
 
         log.info("Verify task succeeded: docId={}, version={}, permanentKey={}",
                 task.getDocId(), task.getNewVersionNumber(), permanentKey);

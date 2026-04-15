@@ -48,9 +48,8 @@ public class VersionsController implements VersionsApi {
 
     @Override
     public ResponseEntity<S3UploadResponse> createVersion(UUID docId, CreateVersionRequest req) {
-        UUID callerId = securityHelper.currentUser().userId();
         return ResponseEntity.status(HttpStatus.CREATED)
-            .body(versionService.createVersion(docId, req, callerId));
+            .body(versionService.createVersion(docId, req));
     }
 
     @Override

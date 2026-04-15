@@ -46,6 +46,10 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_NOTIFY_WEBHOOK_ENABLE_stagingdiff: "on"
+      MINIO_NOTIFY_WEBHOOK_ENDPOINT_stagingdiff: "http://vcs-backend:8080/internal/webhook/minio"
+      MINIO_NOTIFY_WEBHOOK_AUTH_TOKEN_stagingdiff: "${MINIO_WEBHOOK_TOKEN}"
+
     volumes:
       - minio-data:/data
     networks:

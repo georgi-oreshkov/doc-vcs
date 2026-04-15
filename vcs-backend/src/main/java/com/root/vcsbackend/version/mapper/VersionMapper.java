@@ -8,6 +8,7 @@ import com.root.vcsbackend.model.Version.StatusEnum;
 import com.root.vcsbackend.shared.mapper.JsonNullableMapper;
 import com.root.vcsbackend.shared.mapper.MapStructConfig;
 import com.root.vcsbackend.version.domain.CommentEntity;
+import com.root.vcsbackend.version.domain.StorageType;
 import com.root.vcsbackend.version.domain.VersionEntity;
 import com.root.vcsbackend.version.domain.VersionStatus;
 import org.mapstruct.Mapper;
@@ -29,7 +30,7 @@ public interface VersionMapper {
     @Mapping(target = "isDraft", source = "req.isDraft")
     @Mapping(target = "checksum", source = "req.checksum")
     @Mapping(target = "status", constant = "PENDING")
-    @Mapping(target = "storageType", ignore = true)
+    @Mapping(target = "storageType", source = "req.isDiff", qualifiedByName = "isDiffToStorageType")
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
@@ -51,4 +52,9 @@ public interface VersionMapper {
     default StatusEnum versionStatusToApi(VersionStatus status) {
         return StatusEnum.fromValue(status.name());
     }
+    @Named("isDiffToStorageType")
+    default StorageType isDiffToStorageType(Boolean isDiff) {
+        return Boolean.TRUE.equals(isDiff) ? StorageType.DIFF : StorageType.SNAPSHOT;
+    }
 }
+

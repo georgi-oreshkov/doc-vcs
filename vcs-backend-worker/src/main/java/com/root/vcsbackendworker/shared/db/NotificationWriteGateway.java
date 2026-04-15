@@ -20,8 +20,6 @@ import java.util.UUID;
  * {@code pg_notify('vcs_notification_inserted', ...)} which the backend's
  * {@code PostgresNotificationListener} picks up and pushes via SSE.
  * <p>
- * For verification success the version checksum is also updated atomically
- * within the same transaction.
  */
 @Slf4j
 @Repository
@@ -40,20 +38,11 @@ public class NotificationWriteGateway {
     // ── Success outcomes ────────────────────────────────────────────────────
 
     /**
-     * Records a successful diff verification: updates the version checksum and
-     * inserts a notification — both within a single transaction.
+     * Records a successful diff verification:
+     * inserts a notification.
      */
     @Transactional
-    public void recordVerificationSuccess(UUID recipientId, UUID docId, UUID versionId, String checksum, Integer version) {
-        jdbcClient.sql("""
-                UPDATE vcs_core.versions
-                SET checksum = :checksum
-                WHERE id = :versionId
-                  AND checksum IS NULL
-                """)
-                .param("versionId", versionId)
-                .param("checksum", checksum)
-                .update();
+    public void recordVerificationSuccess(UUID recipientId, UUID docId, UUID versionId, Integer version) {
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("docId", docId.toString());
