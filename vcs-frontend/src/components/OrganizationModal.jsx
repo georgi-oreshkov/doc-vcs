@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button, Input, Textarea } from "@heroui/react";
+import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button, Input } from "@heroui/react";
 
 export default function OrganizationModal({ isOpen, onOpenChange, editingOrg, onSave, isSaving }) {
   const isEditing = !!editingOrg;
@@ -15,16 +15,15 @@ export default function OrganizationModal({ isOpen, onOpenChange, editingOrg, on
       onOpenChange={onOpenChange} 
       placement="center"
       classNames={{
+        // Reverting to the dark zinc base
         base: "bg-zinc-950 border border-zinc-800",
-        header: "border-b border-zinc-800 text-white",
-        footer: "border-t border-zinc-800",
-        closeButton: "hover:bg-zinc-800 active:bg-zinc-700 text-white",
+        closeButton: "hover:bg-white/5 active:bg-white/10 text-zinc-400"
       }}
     >
       <ModalContent>
         {(onClose) => (
           <>
-            <ModalHeader className="flex flex-col gap-1">
+            <ModalHeader className="text-white font-bold text-xl">
               {isEditing ? "Organization Settings" : "Create New Organization"}
             </ModalHeader>
             <ModalBody className="py-6">
@@ -34,18 +33,28 @@ export default function OrganizationModal({ isOpen, onOpenChange, editingOrg, on
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 variant="bordered" 
-                classNames={{ inputWrapper: "border-zinc-700 text-white" }}
+                classNames={{ 
+                  label: "text-zinc-400",
+                  input: "text-white placeholder:text-zinc-600",
+                  // Reverting to the lime green focus ring
+                  inputWrapper: "border-zinc-800 bg-zinc-900/50 hover:border-zinc-700 focus-within:!border-lime-500" 
+                }}
               />
             </ModalBody>
             <ModalFooter>
-              <Button color="danger" variant="light" onPress={onClose}>
+              <Button 
+                variant="light" 
+                onPress={onClose}
+                className="text-zinc-400 hover:text-white"
+              >
                 Cancel
               </Button>
               <Button 
-                color="primary" 
                 onPress={() => onSave({ name }, onClose)}
                 isDisabled={!name.trim()}
                 isLoading={isSaving}
+                // Reverting to the high-contrast lime primary button
+                className="bg-lime-600 text-black font-bold hover:bg-lime-500 disabled:bg-zinc-800 disabled:text-zinc-600 transition-colors"
               >
                 {isEditing ? "Save Changes" : "Create"}
               </Button>

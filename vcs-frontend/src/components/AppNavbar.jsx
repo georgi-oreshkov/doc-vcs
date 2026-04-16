@@ -35,13 +35,15 @@ export default function AppNavbar() {
   // Function to determine if a nav item should be active
   const isNavItemActive = (item) => {
     const path = location.pathname;
-    
+
     if (item.path === "/organizations") {
-      return path === "/organizations";
+      // Highlight Organizations for any /organizations/* route
+      return path === "/organizations" || path.startsWith("/organizations/");
     } else if (item.path === "/documents/my") {
-      return path === "/documents/my" || path.includes("/documents");
+      // Only highlight My Documents for the explicit my-documents route
+      return path === "/documents/my" || path.startsWith("/documents/my/");
     } else if (item.path === "/reviews") {
-      return path === "/reviews";
+      return path === "/reviews" || path.startsWith("/reviews/");
     }
     return path === item.path || path.startsWith(item.path + '/');
   };

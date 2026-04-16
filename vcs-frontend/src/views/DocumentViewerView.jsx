@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, Slider, ButtonGroup, Spinner } from "@heroui/react";
-import { ArrowLeft, History, Download, UploadCloud, RotateCcw, Columns, AlignLeft } from 'lucide-react';
+import { ArrowLeft, ArrowRight, History, Download, UploadCloud, RotateCcw, Columns, AlignLeft } from 'lucide-react';
 import { useDocument } from '../hooks/useDocuments';
 import { useVersions, useDiff, useVersionDownloadUrl, useRollbackVersion, useCreateVersion } from '../hooks/useVersions';
 import { formatVersionNumber } from '../api/transforms';

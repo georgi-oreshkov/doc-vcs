@@ -31,15 +31,24 @@ export default function OrganizationCard({ org, onSelect, onOpenModal, isSelecte
       </CardBody>
       <CardFooter className="gap-3">
         {isSelected ? (
-          <Button 
-            className="flex-1 bg-red-600 text-white hover:bg-red-700" 
-            endContent={<LogOut size={16} />} 
-            onClick={() => onLeave(org)}
-            isLoading={isLeaving}
-            disabled={isLeaving}
-          >
-            Leave
-          </Button>
+          <>
+            <Button
+              className="flex-1 bg-zinc-800 text-white hover:bg-lime-500 hover:text-black"
+              endContent={<ArrowRight size={16} />}
+              onClick={() => onSelect(org)}
+            >
+              Go to Workspace
+            </Button>
+            <Button
+              className="bg-red-600 text-white hover:bg-red-700"
+              endContent={<LogOut size={16} />}
+              onClick={() => onLeave(org)}
+              isLoading={isLeaving}
+              disabled={isLeaving}
+            >
+              Leave
+            </Button>
+          </>
         ) : (
           <Button className="flex-1 bg-zinc-800 text-white hover:bg-lime-500 hover:text-black" endContent={<ArrowRight size={16} />} onClick={() => onSelect(org)}>
             Workspace

@@ -1,20 +1,22 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { useDisclosure, Button, Spinner } from "@heroui/react";
-import { Plus } from 'lucide-react';
+import { Plus, ArrowLeft } from 'lucide-react';
 import DocumentCard from '../components/DocumentCard';
 import DocumentsFilter, { useDocumentFilters } from '../components/DocumentsFilter';
 import NewDocumentModal from '../components/NewDocumentModal';
 import { useOrgDocuments, useMyDocuments, useCreateDocument } from '../hooks/useDocuments';
 import { useOrg } from '../context/OrgContext';
+import { useOrganization } from '../hooks/useOrganizations';
 import { displayStatus } from '../api/transforms';
 
 export default function DocumentsView({ myDocs }) {
   const navigate = useNavigate();
   const { orgId } = useParams();
-  const { selectedOrg } = useOrg();
+  const { selectedOrg, activeRole } = useOrg();
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
 
   const effectiveOrgId = orgId || selectedOrg?.id;
+  const { data: orgData } = useOrganization(effectiveOrgId);
   
   const { data: orgDocsData, isLoading: orgLoading } = useOrgDocuments(effectiveOrgId, {}, );
   const { data: myDocsData, isLoading: myLoading } = useMyDocuments();
@@ -53,12 +55,22 @@ export default function DocumentsView({ myDocs }) {
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 w-full z-10 flex-grow">
+      {!myDocs && (selectedOrg || orgData || effectiveOrgId) && (
+        <div className="flex items-center gap-2 text-sm text-zinc-500 mb-4">
+          <button onClick={() => navigate(-1)} className="flex items-center gap-1 hover:text-white transition">
+            <ArrowLeft size={16} /> Back
+          </button>
+          <span>/</span>
+          <span className="text-zinc-300 font-semibold">{orgData?.name || selectedOrg?.name || 'Workspace'}</span>
+        </div>
+      )}
+
       <div className="flex justify-between items-center mb-8 border-b border-zinc-800 pb-8">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">{myDocs ? 'My Documents' : 'Documents'}</h1>
           <p className="text-zinc-400 text-sm">Search, filter, and manage your organization's versioned documents.</p>
         </div>
-        {!myDocs && (
+        {!myDocs && (activeRole === 'AUTHOR' || activeRole === 'ADMIN') && (
           <Button color="primary" startContent={<Plus size={18} />} onPress={onOpen}>
             New Document
           </Button>

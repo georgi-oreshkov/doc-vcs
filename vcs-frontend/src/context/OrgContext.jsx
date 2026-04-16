@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useMemo } from 'react';
+import { createContext, useContext, useState, useMemo, useEffect } from 'react';
 import { useMatch } from 'react-router-dom';
 import { useAuth } from 'react-oidc-context';
 import { useQuery } from '@tanstack/react-query';
@@ -10,7 +10,7 @@ export function OrgProvider({ children }) {
   const [selectedOrg, _setSelectedOrg] = useState(null);
   const auth = useAuth();
 
-  // Derive orgId from route when inside /organizations/:orgId/*
+  // Derive orgId from route when inside /organizations/:orgId/* or when viewing docs from that org
   const orgMatch = useMatch('/organizations/:orgId/*');
   const routeOrgId = orgMatch?.params?.orgId;
 
@@ -21,20 +21,32 @@ export function OrgProvider({ children }) {
     enabled: auth.isAuthenticated,
   });
 
+  // If the URL contains an orgId, ensure selectedOrg is set so the
+  // organization context persists when navigating away from org routes.
+  useEffect(() => {
+    if (routeOrgId && orgs) {
+      const found = orgs.find(o => o.id === routeOrgId);
+      if (found && (!selectedOrg || selectedOrg.id !== routeOrgId)) {
+        _setSelectedOrg(found);
+      }
+    }
+    // Intentionally do NOT clear selectedOrg when leaving the org route.
+    // The user must explicitly "Leave" the workspace to clear it.
+  }, [routeOrgId, orgs, selectedOrg]);
+
   // Resolve the active org and role
   const { activeOrg, activeRole } = useMemo(() => {
-    // If selectedOrg matches the route, use it directly
-    if (selectedOrg && (!routeOrgId || selectedOrg.id === routeOrgId)) {
-      return { activeOrg: selectedOrg, activeRole: selectedOrg.my_role || null };
-    }
-    // Otherwise look up from the orgs list
+    // Priority 1: If in an org route, look up from orgs list (most reliable)
     if (routeOrgId && orgs) {
       const found = orgs.find(o => o.id === routeOrgId);
       if (found) return { activeOrg: found, activeRole: found.my_role || null };
     }
+    // Priority 2: Use selectedOrg if set (handles navigation outside org routes)
+    if (selectedOrg) {
+      return { activeOrg: selectedOrg, activeRole: selectedOrg.my_role || null };
+    }
     // Not inside an org context
-    if (!routeOrgId) return { activeOrg: null, activeRole: null };
-    return { activeOrg: selectedOrg, activeRole: selectedOrg?.my_role || null };
+    return { activeOrg: null, activeRole: null };
   }, [selectedOrg, routeOrgId, orgs]);
 
   const setSelectedOrg = (org) => _setSelectedOrg(org);

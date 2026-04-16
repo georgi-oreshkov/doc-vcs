@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Input, Button, useDisclosure, Spinner } from "@heroui/react";
 import { Search, Plus } from 'lucide-react';
@@ -6,6 +6,9 @@ import OrganizationCard from '../components/OrganizationCard';
 import OrganizationModal from '../components/OrganizationModal';
 import { useOrganizations, useCreateOrganization, useUpdateOrganization } from '../hooks/useOrganizations';
 import { useOrg } from '../context/OrgContext';
+import { getOrgUsers } from '../api/organizationsApi';
+import { getOrgDocuments } from '../api/documentsApi';
+import { useQuery } from '@tanstack/react-query';
 
 export default function OrganizationsView() {
   const navigate = useNavigate();
@@ -18,7 +21,40 @@ export default function OrganizationsView() {
   const createOrg = useCreateOrganization();
   const updateOrg = useUpdateOrganization();
 
-  const filteredOrgs = orgs.filter(o => o.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  // Fetch members and docs count for each organization
+  const [orgsWithCounts, setOrgsWithCounts] = useState([]);
+
+  useMemo(() => {
+    if (orgs.length === 0) {
+      setOrgsWithCounts([]);
+      return;
+    }
+
+    const enrichOrgs = async () => {
+      const enriched = await Promise.all(
+        orgs.map(async (org) => {
+          try {
+            const [users, docs] = await Promise.all([
+              getOrgUsers(org.id),
+              getOrgDocuments(org.id),
+            ]);
+            return {
+              ...org,
+              members: users?.length || 0,
+              docs: docs?.length || 0,
+            };
+          } catch (err) {
+            return { ...org, members: 0, docs: 0 };
+          }
+        })
+      );
+      setOrgsWithCounts(enriched);
+    };
+
+    enrichOrgs();
+  }, [orgs]);
+
+  const filteredOrgs = orgsWithCounts.filter(o => o.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   const handleOpenModal = (org = null) => {
     setEditingOrg(org);
