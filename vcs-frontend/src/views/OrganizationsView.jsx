@@ -9,7 +9,7 @@ import { useOrg } from '../context/OrgContext';
 
 export default function OrganizationsView() {
   const navigate = useNavigate();
-  const { setSelectedOrg } = useOrg();
+  const { setSelectedOrg, selectedOrg } = useOrg();
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
   const [editingOrg, setEditingOrg] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -36,6 +36,10 @@ export default function OrganizationsView() {
   const handleSelectOrg = (org) => {
     setSelectedOrg(org);
     navigate(`/organizations/${org.id}/documents`);
+  };
+
+  const handleLeaveOrg = (org) => {
+    setSelectedOrg(null);
   };
 
   return (
@@ -71,7 +75,10 @@ export default function OrganizationsView() {
               key={org.id} 
               org={org} 
               onSelect={handleSelectOrg} 
-              onOpenModal={handleOpenModal} 
+              onOpenModal={handleOpenModal}
+              isSelected={selectedOrg?.id === org.id}
+              onLeave={handleLeaveOrg}
+              isLeaving={false}
             />
           ))}
         </div>

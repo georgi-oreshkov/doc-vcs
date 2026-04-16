@@ -1,5 +1,5 @@
 import { Card, CardHeader, CardBody, CardFooter, Button, Chip } from "@heroui/react";
-import { Building2, Users, FileText, ArrowRight, Settings } from 'lucide-react';
+import { Building2, Users, FileText, ArrowRight, Settings, LogOut } from 'lucide-react';
 
 const ROLE_COLORS = {
   ADMIN: 'primary',
@@ -8,7 +8,7 @@ const ROLE_COLORS = {
   READER: 'default',
 };
 
-export default function OrganizationCard({ org, onSelect, onOpenModal }) {
+export default function OrganizationCard({ org, onSelect, onOpenModal, isSelected, onLeave, isLeaving }) {
   const role = org.my_role;
   return (
     <Card className="bg-zinc-900 border border-zinc-800 hover:border-lime-500/50 transition-colors">
@@ -30,10 +30,22 @@ export default function OrganizationCard({ org, onSelect, onOpenModal }) {
         </div>
       </CardBody>
       <CardFooter className="gap-3">
-        <Button className="flex-1 bg-zinc-800 text-white hover:bg-lime-500 hover:text-black" endContent={<ArrowRight size={16} />} onClick={() => onSelect(org)}>
-          Workspace
-        </Button>
-        {role === 'ADMIN' && (
+        {isSelected ? (
+          <Button 
+            className="flex-1 bg-red-600 text-white hover:bg-red-700" 
+            endContent={<LogOut size={16} />} 
+            onClick={() => onLeave(org)}
+            isLoading={isLeaving}
+            disabled={isLeaving}
+          >
+            Leave
+          </Button>
+        ) : (
+          <Button className="flex-1 bg-zinc-800 text-white hover:bg-lime-500 hover:text-black" endContent={<ArrowRight size={16} />} onClick={() => onSelect(org)}>
+            Workspace
+          </Button>
+        )}
+        {role === 'ADMIN' && !isSelected && (
           <Button isIconOnly variant="bordered" className="border-zinc-700 text-zinc-300" onClick={() => onOpenModal(org)}>
             <Settings size={18} />
           </Button>

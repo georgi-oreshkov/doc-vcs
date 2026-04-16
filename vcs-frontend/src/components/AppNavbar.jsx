@@ -32,6 +32,20 @@ export default function AppNavbar() {
     return BASE_NAV_ITEMS;
   }, [selectedOrg, activeRole]);
 
+  // Function to determine if a nav item should be active
+  const isNavItemActive = (item) => {
+    const path = location.pathname;
+    
+    if (item.path === "/organizations") {
+      return path === "/organizations";
+    } else if (item.path === "/documents/my") {
+      return path === "/documents/my" || path.includes("/documents");
+    } else if (item.path === "/reviews") {
+      return path === "/reviews";
+    }
+    return path === item.path || path.startsWith(item.path + '/');
+  };
+
   const handleNavigation = (path) => {
     navigate(path);
     setIsMenuOpen(false);
@@ -55,7 +69,8 @@ export default function AppNavbar() {
       <DesktopLinks 
         navItems={navItems} 
         currentPath={location.pathname} 
-        onNavigate={handleNavigation} 
+        onNavigate={handleNavigation}
+        isNavItemActive={isNavItemActive}
       />
 
       <AuthSection />
@@ -63,7 +78,8 @@ export default function AppNavbar() {
       <MobileMenuContent 
         navItems={navItems} 
         currentPath={location.pathname} 
-        onNavigate={handleNavigation} 
+        onNavigate={handleNavigation}
+        isNavItemActive={isNavItemActive} 
       />
     </Navbar>
   );

@@ -1,10 +1,10 @@
 import { NavbarContent, NavbarItem, Link } from "@heroui/react";
 
-export default function DesktopLinks({ navItems, currentPath, onNavigate }) {
+export default function DesktopLinks({ navItems, currentPath, onNavigate, isNavItemActive }) {
   return (
     <NavbarContent className="hidden sm:flex gap-6 ml-6" justify="start">
       {navItems.map((item) => {
-        const isActive = currentPath === item.path || currentPath.startsWith(item.path + '/');
+        const isActive = isNavItemActive(item);
         
         return (
           <NavbarItem key={item.path} isActive={isActive}>

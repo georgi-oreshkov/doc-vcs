@@ -32,8 +32,8 @@ export default function LandingView() {
                 </li>
               ))}
             </ul>
-            <Button color="primary" variant="bordered" className="w-full py-6 text-base font-bold">
-              Start Free Root Cloud Trial &rarr;
+            <Button color="default" variant="bordered" className="w-full py-6 text-base font-bold">
+              Unavailable
             </Button>
           </CardBody>
         </Card>

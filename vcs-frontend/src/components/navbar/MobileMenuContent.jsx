@@ -1,24 +1,28 @@
 import { useAuth } from 'react-oidc-context';
 import { NavbarMenu, NavbarMenuItem, Link, Button } from "@heroui/react";
 
-export default function MobileMenuContent({ navItems, currentPath, onNavigate }) {
+export default function MobileMenuContent({ navItems, currentPath, onNavigate, isNavItemActive }) {
   const auth = useAuth();
   const handleLogin = () => auth.signinRedirect();
 
   return (
     <NavbarMenu className="bg-black/95 pt-8 border-t border-zinc-800 backdrop-blur-xl">
-      {navItems.map((item) => (
-        <NavbarMenuItem key={`${item.path}-mobile`}>
-          <Link
-            className="w-full text-white text-xl mb-4"
-            color={currentPath === item.path || currentPath.startsWith(item.path + '/') ? "primary" : "foreground"}
-            onClick={() => onNavigate(item.path)}
-            size="lg"
-          >
-            {item.label}
-          </Link>
-        </NavbarMenuItem>
-      ))}
+      {navItems.map((item) => {
+        const isActive = isNavItemActive(item);
+
+        return (
+          <NavbarMenuItem key={`${item.path}-mobile`}>
+            <Link
+              className="w-full text-white text-xl mb-4"
+              color={isActive ? "primary" : "foreground"}
+              onClick={() => onNavigate(item.path)}
+              size="lg"
+            >
+              {item.label}
+            </Link>
+          </NavbarMenuItem>
+        );
+      })}
       
       {!auth.isAuthenticated && (
         <div className="flex flex-col gap-4 mt-8 pt-8 border-t border-zinc-800 w-full">
