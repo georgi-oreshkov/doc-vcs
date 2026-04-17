@@ -10,29 +10,71 @@ import {
 } from "@heroui/react";
 import { UploadCloud, FileText, X } from "lucide-react";
 
-export default function NewDocumentModal({ isOpen, onOpenChange, onSave, isSaving }) {
+export default function NewDocumentModal({ isOpen, onOpenChange }) {
     const [title, setTitle] = useState("");
     const [file, setFile] = useState(null);
     const fileInputRef = useRef(null);
 
+    // Функция за избиране на файл
     const handleFileChange = (e) => {
         if (e.target.files && e.target.files[0]) {
             setFile(e.target.files[0]);
         }
     };
 
+    // Function to handle saving the document (placeholder for now)
     const handleSave = (onClose) => {
-        if (onSave) {
-            onSave({ name: title }, file, () => {
-                setTitle("");
-                setFile(null);
-                onClose();
+        console.log("Saving document:", { title, file });
+        // To-Do: Implement actual upload logic here (e.g., API call)
+
+        /*
+        setTitle("");
+        setFile(null);
+        onClose();
+        */
+
+        //----------------------------------------------------------------------------
+        if (!file) {
+            console.error("No file selected");
+            return;
+        }
+
+        try {
+            //console.log("Starting upload...");
+
+            // 2. Request presigned URL from backend
+            const res = await fetch(
+                `http://localhost:8080/presign?fileName=${file.name}`//change to presign
+            );
+
+            if (!res.ok) {
+                throw new Error("Failed to get presigned URL");
+            }
+
+            const uploadUrl = await res.text();
+            console.log("Presigned URL:", uploadUrl);
+
+            // 3. Upload file directly to S3
+            const uploadRes = await fetch(uploadUrl, {
+                method: "PUT",
+                body: file,
             });
-        } else {
+
+            if (!uploadRes.ok) {
+                throw new Error("Upload to S3 failed");
+            }
+
+            console.log("Upload successful!");
+
+            // 4. Reset UI
             setTitle("");
             setFile(null);
             onClose();
+
+        } catch (error) {
+            console.error("Upload error:", error);
         }
+        //------------------------------------------------------------------------=
     };
 
     return (
@@ -99,7 +141,7 @@ export default function NewDocumentModal({ isOpen, onOpenChange, onSave, isSavin
                             <Button color="primary" variant="light" onPress={onClose}>
                                 Cancel
                             </Button>
-                            <Button color="primary" onPress={() => handleSave(onClose)} isDisabled={!title || !file} isLoading={isSaving}>
+                            <Button color="primary" onPress={() => handleSave(onClose)} isDisabled={!title || !file}>
                                 Upload Document
                             </Button>
                         </ModalFooter>
