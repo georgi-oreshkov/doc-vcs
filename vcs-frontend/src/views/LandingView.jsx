@@ -1,7 +1,12 @@
+import { useAuth } from 'react-oidc-context';
 import { Button, Card, CardBody } from "@heroui/react";
 import { Cloud, Server, Check, Zap, ShieldCheck } from 'lucide-react';
 
 export default function LandingView() {
+  const auth = useAuth();
+    
+  const handleLogin = () => auth.signinRedirect();
+
   return (
     <main className="flex-grow flex flex-col items-center pt-24 pb-16 px-6 text-center z-10">
       <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 max-w-4xl leading-tight text-white">
@@ -54,7 +59,7 @@ export default function LandingView() {
                 </li>
               ))}
             </ul>
-            <Button color="primary" variant="bordered" className="w-full py-6 text-base font-bold">
+            <Button color="primary" variant="bordered" className="w-full py-6 text-base font-bold" onClick={handleLogin}>
               Start Free Enterprise Trial &rarr;
             </Button>
           </CardBody>
