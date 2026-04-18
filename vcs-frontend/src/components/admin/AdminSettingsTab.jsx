@@ -42,7 +42,7 @@ export default function AdminSettingsTab({ orgId, org, onDeleted }) {
           onPress={handleSave}
           isLoading={updateOrg.isPending}
           isDisabled={!name.trim() || name.trim() === org?.name}
-          className="self-end"
+          className="bg-lime-600 text-black font-bold hover:bg-lime-500 disabled:bg-lime-800 disabled:text-zinc-800 transition-colors self-end"
         >
           Save
         </Button>
@@ -69,7 +69,7 @@ export default function AdminSettingsTab({ orgId, org, onDeleted }) {
                 </p>
               </ModalBody>
               <ModalFooter>
-                <Button variant="light" onPress={onClose}>Cancel</Button>
+                <Button color="primary" variant="light" onPress={onClose}>Cancel</Button>
                 <Button color="danger" onPress={() => handleDelete(onClose)} isLoading={deleteOrg.isPending}>
                   Delete
                 </Button>

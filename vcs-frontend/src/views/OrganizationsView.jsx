@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Input, Button, useDisclosure, Spinner } from "@heroui/react";
 import { Search, Plus } from 'lucide-react';
@@ -24,7 +24,7 @@ export default function OrganizationsView() {
   // Fetch members and docs count for each organization
   const [orgsWithCounts, setOrgsWithCounts] = useState([]);
 
-  useMemo(() => {
+  useEffect(() => {
     if (orgs.length === 0) {
       setOrgsWithCounts([]);
       return;
@@ -94,7 +94,10 @@ export default function OrganizationsView() {
             className="w-full sm:w-64"
             variant="bordered"
           />
-          <Button color="primary" startContent={<Plus size={18} />} onPress={() => handleOpenModal()}>
+          <Button 
+            className="bg-lime-600 text-black font-bold hover:bg-lime-500 disabled:bg-zinc-800 disabled:text-zinc-600 transition-colors" 
+            startContent={<Plus size={18} />} onPress={() => handleOpenModal()}
+          >
             Create
           </Button>
         </div>

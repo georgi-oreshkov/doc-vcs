@@ -52,7 +52,10 @@ export default function UpdatePhoto({ isOpen, onOpenChange, currentPhotoUrl }) {
               <Button color="danger" variant="light" onPress={onClose}>
                 Cancel
               </Button>
-              <Button color="primary" isLoading={updateProfile.isPending} onPress={() => {
+              <Button 
+                className="bg-lime-600 text-black font-bold hover:bg-lime-500 disabled:bg-lime-800 disabled:text-zinc-800 transition-colors" 
+                isLoading={updateProfile.isPending} 
+                onPress={() => {
                 if (previewUrl) {
                   updateProfile.mutate({ photo_url: previewUrl }, { onSuccess: onClose });
                 } else {

@@ -138,10 +138,13 @@ export default function NewDocumentModal({ isOpen, onOpenChange }) {
 
                         </ModalBody>
                         <ModalFooter>
-                            <Button color="primary" variant="light" onPress={onClose}>
+                            <Button color="danger" variant="light"  onPress={onClose}>
                                 Cancel
                             </Button>
-                            <Button color="primary" onPress={() => handleSave(onClose)} isDisabled={!title || !file}>
+                            <Button 
+                                className="bg-lime-600 text-black font-bold hover:bg-lime-500 disabled:bg-zinc-800 disabled:text-zinc-600 transition-colors"
+                                onPress={() => handleSave(onClose)} isDisabled={!title || !file}
+                            >
                                 Upload Document
                             </Button>
                         </ModalFooter>

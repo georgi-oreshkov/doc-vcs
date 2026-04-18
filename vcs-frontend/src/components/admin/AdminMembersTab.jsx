@@ -40,7 +40,11 @@ export default function AdminMembersTab({ orgId }) {
     <div className="pt-6">
       <div className="flex justify-between items-center mb-6">
         <p className="text-zinc-400 text-sm">{users.length} member{users.length !== 1 ? 's' : ''}</p>
-        <Button color="primary" size="sm" startContent={<Plus size={16} />} onPress={onOpen}>
+        <Button 
+          className="bg-lime-600 text-black font-bold hover:bg-lime-500 disabled:bg-zinc-800 disabled:text-zinc-600 transition-colors" 
+          size="sm" 
+          startContent={<Plus size={16} />} onPress={onOpen}
+        > 
           Add Member
         </Button>
       </div>

@@ -52,7 +52,7 @@ export default function DocumentCard({ doc, onSelect }) {
             className="text-zinc-500 min-w-min w-8 h-8 cursor-pointer"
             onClick={(e) => {
               e.stopPropagation(); 
-              console.log("Опции за документ", doc.id);
+              console.log("Document options for: ", doc.id);
             }}
           >
             <MoreVertical size={18} />

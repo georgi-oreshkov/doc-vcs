@@ -71,7 +71,10 @@ export default function DocumentsView({ myDocs }) {
           <p className="text-zinc-400 text-sm">Search, filter, and manage your organization's versioned documents.</p>
         </div>
         {!myDocs && (activeRole === 'AUTHOR' || activeRole === 'ADMIN') && (
-          <Button color="primary" startContent={<Plus size={18} />} onPress={onOpen}>
+          <Button 
+            className="bg-lime-600 text-black font-bold hover:bg-lime-500 disabled:bg-zinc-800 disabled:text-zinc-600 transition-colors" 
+            startContent={<Plus size={18} />} onPress={onOpen}
+          >
             New Document
           </Button>
         )}

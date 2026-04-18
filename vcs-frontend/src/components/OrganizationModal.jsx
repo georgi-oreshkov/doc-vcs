@@ -36,7 +36,6 @@ export default function OrganizationModal({ isOpen, onOpenChange, editingOrg, on
                 classNames={{ 
                   label: "text-zinc-400",
                   input: "text-white placeholder:text-zinc-600",
-                  // Reverting to the lime green focus ring
                   inputWrapper: "border-zinc-800 bg-zinc-900/50 hover:border-zinc-700 focus-within:!border-lime-500" 
                 }}
               />
@@ -45,7 +44,7 @@ export default function OrganizationModal({ isOpen, onOpenChange, editingOrg, on
               <Button 
                 variant="light" 
                 onPress={onClose}
-                className="text-zinc-400 hover:text-white"
+                color="danger"
               >
                 Cancel
               </Button>
@@ -53,7 +52,6 @@ export default function OrganizationModal({ isOpen, onOpenChange, editingOrg, on
                 onPress={() => onSave({ name }, onClose)}
                 isDisabled={!name.trim()}
                 isLoading={isSaving}
-                // Reverting to the high-contrast lime primary button
                 className="bg-lime-600 text-black font-bold hover:bg-lime-500 disabled:bg-zinc-800 disabled:text-zinc-600 transition-colors"
               >
                 {isEditing ? "Save Changes" : "Create"}

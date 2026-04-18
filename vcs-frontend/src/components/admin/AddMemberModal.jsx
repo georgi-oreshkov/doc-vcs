@@ -66,7 +66,7 @@ export default function AddMemberModal({ isOpen, onOpenChange, onSubmit, isLoadi
                     key={r} 
                     textValue={r.charAt(0) + r.slice(1).toLowerCase()} 
                     // 3. Force the individual unselected options to be white
-                    className="!text-white data-[hover=true]:bg-zinc-800 data-[hover=true]:!text-lime-400"
+                    className="!text-white data-[hover=true]:bg-zinc-800 data-[hover=true]:!text-lime-800"
                   >
                     {r.charAt(0) + r.slice(1).toLowerCase()}
                   </SelectItem>
@@ -77,7 +77,7 @@ export default function AddMemberModal({ isOpen, onOpenChange, onSubmit, isLoadi
               <Button 
                 variant="light" 
                 onPress={onClose}
-                className="text-red-400 hover:text-red"
+                color="danger"
               >
                 Cancel
               </Button>
@@ -85,7 +85,6 @@ export default function AddMemberModal({ isOpen, onOpenChange, onSubmit, isLoadi
                 onPress={() => handleSubmit(onClose)} 
                 isLoading={isLoading} 
                 isDisabled={!userId.trim()}
-                // Overrides the default blue with your custom lime theme
                 className="bg-lime-600 text-black font-bold hover:bg-lime-500 disabled:bg-zinc-800 disabled:text-zinc-600 transition-colors"
               >
                 Add Member

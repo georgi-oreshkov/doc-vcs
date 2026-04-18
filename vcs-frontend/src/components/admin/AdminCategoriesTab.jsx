@@ -36,7 +36,13 @@ export default function AdminCategoriesTab({ orgId }) {
           classNames={{ inputWrapper: "border-zinc-700" }}
           onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
         />
-        <Button color="primary" startContent={<Plus size={16} />} onPress={handleAdd} isLoading={createCat.isPending} isDisabled={!newName.trim()}>
+        <Button  
+          className="bg-lime-600 text-black font-bold hover:bg-lime-500 disabled:bg-lime-800 disabled:text-zinc-800 transition-colors"
+          startContent={<Plus size={16} />} 
+          onPress={handleAdd} 
+          isLoading={createCat.isPending} 
+          isDisabled={!newName.trim()}
+        >
           Add
         </Button>
       </div>
