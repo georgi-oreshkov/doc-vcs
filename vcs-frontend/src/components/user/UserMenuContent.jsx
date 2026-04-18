@@ -1,6 +1,6 @@
 import { DropdownMenu, DropdownItem } from "@heroui/react";
 
-export default function UserMenuContent({ email, onOpenPhotoModal, onLogout }) {
+export default function UserMenuContent({ email, userId, onOpenPhotoModal, onLogout }) {
   return (
     <DropdownMenu 
       aria-label="User Actions" 
@@ -11,10 +11,13 @@ export default function UserMenuContent({ email, onOpenPhotoModal, onLogout }) {
       <DropdownItem 
         key="profile" 
         isReadOnly 
-        className="h-14 gap-2 opacity-100 cursor-default data-[hover=true]:bg-transparent data-[hover=true]:text-white"
+        className="h-16 gap-2 opacity-100 cursor-default data-[hover=true]:bg-transparent data-[hover=true]:text-white"
       >
         <p className="font-bold text-zinc-400 text-xs uppercase">Signed in as</p>
-        <p className="font-bold text-lime-400">{email}</p>
+        <p className="font-bold text-lime-400 truncate">{email}</p>
+        {userId && (
+          <p className="text-xs text-zinc-500 truncate">ID: {userId}</p>
+        )}
       </DropdownItem>
       
       <DropdownItem key="update_photo" onPress={onOpenPhotoModal}>

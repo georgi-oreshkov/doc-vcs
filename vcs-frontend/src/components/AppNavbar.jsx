@@ -12,7 +12,6 @@ import { useOrg } from '../context/OrgContext';
 const BASE_NAV_ITEMS = [
   { label: "Organizations", path: "/organizations" },
   { label: "My Documents", path: "/documents/my" },
-  { label: "Approvals", path: "/reviews" },
 ];
 
 export default function AppNavbar() {
@@ -23,13 +22,19 @@ export default function AppNavbar() {
   const { selectedOrg, activeRole } = useOrg();
 
   const navItems = useMemo(() => {
-    if (selectedOrg && activeRole === 'ADMIN') {
-      return [
-        ...BASE_NAV_ITEMS,
-        { label: "Admin", path: `/organizations/${selectedOrg.id}/admin` },
-      ];
+    let items = [...BASE_NAV_ITEMS];
+    
+    // Add Approvals tab if user is ADMIN or REVIEWER
+    if (activeRole === 'ADMIN' || activeRole === 'REVIEWER') {
+      items.push({ label: "Approvals", path: "/reviews" });
     }
-    return BASE_NAV_ITEMS;
+    
+    // Add Admin tab if user is ADMIN
+    if (selectedOrg && activeRole === 'ADMIN') {
+      items.push({ label: "Admin", path: `/organizations/${selectedOrg.id}/admin` });
+    }
+    
+    return items;
   }, [selectedOrg, activeRole]);
 
   // Function to determine if a nav item should be active

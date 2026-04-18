@@ -52,6 +52,7 @@ export default function UserDropdown() {
         
         <UserMenuContent 
           email={userEmail} 
+          userId={profile?.sub}
           onOpenPhotoModal={onOpen} 
           onLogout={handleLogout} 
         />

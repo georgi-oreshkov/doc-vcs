@@ -15,7 +15,7 @@ export default function NewDocumentModal({ isOpen, onOpenChange }) {
     const [file, setFile] = useState(null);
     const fileInputRef = useRef(null);
 
-    // Функция за избиране на файл
+    // Function to handle file selection
     const handleFileChange = (e) => {
         if (e.target.files && e.target.files[0]) {
             setFile(e.target.files[0]);
@@ -23,7 +23,7 @@ export default function NewDocumentModal({ isOpen, onOpenChange }) {
     };
 
     // Function to handle saving the document (placeholder for now)
-    const handleSave = (onClose) => {
+    const handleSave = async (onClose) => {
         console.log("Saving document:", { title, file });
         // To-Do: Implement actual upload logic here (e.g., API call)
 
