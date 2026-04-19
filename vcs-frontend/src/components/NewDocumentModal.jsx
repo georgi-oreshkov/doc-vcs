@@ -96,7 +96,7 @@ export default function NewDocumentModal({ isOpen, onOpenChange }) {
                                     value={title}
                                     onChange={(e) => setTitle(e.target.value)}
                                     classNames={{
-                                        input: "text-white text-base"
+                                        inputWrapper: "border-zinc-800 bg-zinc-900/50 hover:border-zinc-700 focus-within:!border-lime-500"
                                     }}
                                 />
                             </div>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Popover, PopoverTrigger, PopoverContent, Button, Badge } from "@heroui/react";
 import { Bell, Check } from "lucide-react";
 import { getNotifications, connectNotificationsStream, markAsRead } from '../../api/notificationsApi';
@@ -21,6 +22,7 @@ export default function NotificationMenu() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const esRef = useRef(null);
+  const navigate = useNavigate();
 
   const unreadCount = notifications.filter(n => !n.readAt).length;
 
@@ -85,6 +87,9 @@ export default function NotificationMenu() {
     // TODO: navigate to related resource if payload contains link
   };
 
+  // Show only a few items in the compact dropdown to keep it small
+  const displayedNotifications = notifications.slice(0, 3);
+
   return (
     <Popover placement="bottom-end" offset={12}>
       <Badge
@@ -135,7 +140,7 @@ export default function NotificationMenu() {
           {!loading && notifications.length === 0 && (
             <div className="p-4 text-zinc-500">No notifications</div>
           )}
-          {notifications.map((notif) => {
+          {displayedNotifications.map((notif) => {
             // try to parse payload if JSON
             let payload = null;
             try { payload = notif.payload ? JSON.parse(notif.payload) : null; } catch (e) { payload = null; }
@@ -166,7 +171,7 @@ export default function NotificationMenu() {
           })}
         </div>
 
-        <div className="bg-zinc-950 p-3 text-center border-t border-zinc-800 hover:bg-zinc-900 cursor-pointer transition-colors">
+        <div onClick={() => navigate('/notifications')} className="bg-zinc-950 p-3 text-center border-t border-zinc-800 hover:bg-zinc-900 cursor-pointer transition-colors">
           <span className="text-sm font-medium text-zinc-400 hover:text-white transition-colors">View all</span>
         </div>
       </PopoverContent>

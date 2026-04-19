@@ -8,6 +8,7 @@ import DocumentsView from './views/DocumentsView';
 import DocumentViewerView from './views/DocumentViewerView';
 import ReviewerView from './views/ReviewerView';
 import AdminPanelView from './views/AdminPanelView';
+import NotificationsView from './views/NotificationsView';
 
 function AuthRedirect({ children }) {
   const auth = useAuth();
@@ -46,6 +47,7 @@ export default function App() {
           <Route path="/documents/my" element={<ProtectedRoute><DocumentsView myDocs /></ProtectedRoute>} />
           <Route path="/documents/:docId" element={<ProtectedRoute><DocumentViewerView /></ProtectedRoute>} />
           <Route path="/reviews" element={<ProtectedRoute><ReviewerView /></ProtectedRoute>} />
+          <Route path="/notifications" element={<ProtectedRoute><NotificationsView /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
