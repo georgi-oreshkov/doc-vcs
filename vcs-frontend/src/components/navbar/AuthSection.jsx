@@ -1,6 +1,7 @@
 import { useAuth } from 'react-oidc-context';
 import { NavbarContent, NavbarItem, Link, Button } from "@heroui/react";
 import UserDropdown from "../UserDropdown"; 
+import NotificationMenu from "./NotificationMenu";
 
 export default function AuthSection() {
   const auth = useAuth();
@@ -32,9 +33,12 @@ export default function AuthSection() {
           </NavbarItem>
         </>
       ) : (
-        <NavbarItem>
+        <>
+        <NavbarItem className="flex items-center gap-2">
+          <NotificationMenu />
           <UserDropdown />
         </NavbarItem>
+        </>
       )}
     </NavbarContent>
   );
