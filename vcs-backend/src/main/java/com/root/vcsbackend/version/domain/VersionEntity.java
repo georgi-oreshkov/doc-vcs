@@ -54,4 +54,8 @@ public class VersionEntity extends BaseEntity {
     @Column(name = "storage_type", nullable = false)
     @Builder.Default
     private StorageType storageType = StorageType.SNAPSHOT;
+
+    /** Short excerpt from the unified diff used for preview purposes. Null for snapshots. */
+    @Column(name = "diff_preview")
+    private String diffPreview;
 }

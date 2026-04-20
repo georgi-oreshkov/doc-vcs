@@ -56,7 +56,7 @@ public class VersionService {
     private final DiffTaskPublisher diffTaskPublisher;
 
     @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
-    public S3UploadResponse createVersion(UUID docId, CreateVersionRequest req) {
+    public S3UploadResponse createVersion(UUID docId, CreateVersionRequest req, UUID callerId) {
         documentFacade.requireExists(docId);
 
         int nextNumber = versionRepository.findTopByDocIdOrderByVersionNumberDesc(docId)
@@ -72,6 +72,10 @@ public class VersionService {
         if (Boolean.FALSE.equals(version.getIsDraft())) {
             documentFacade.updateStatusToPendingReview(docId);
         }
+
+        events.publishEvent(new NotificationEvent(this, callerId, "VERSION_UPLOADED",
+            Map.of("docId", docId, "versionId", version.getId())));
+
         String s3Key = (nextNumber > 1 && req.getIsDiff())? S3KeyTemplates.stagingDiff(docId,nextNumber) : S3KeyTemplates.permanentVersion(docId, nextNumber);
         return new S3UploadResponse().uploadUrl(java.net.URI.create(s3PresignService.generateUploadUrl(s3Key)));
     }

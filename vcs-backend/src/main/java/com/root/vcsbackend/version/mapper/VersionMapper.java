@@ -5,6 +5,7 @@ import com.root.vcsbackend.model.Comment;
 import com.root.vcsbackend.model.CreateVersionRequest;
 import com.root.vcsbackend.model.Version;
 import com.root.vcsbackend.model.Version.StatusEnum;
+import com.root.vcsbackend.model.Version.StorageTypeEnum;
 import com.root.vcsbackend.shared.mapper.JsonNullableMapper;
 import com.root.vcsbackend.shared.mapper.MapStructConfig;
 import com.root.vcsbackend.version.domain.CommentEntity;
@@ -22,6 +23,8 @@ public interface VersionMapper {
 
     @Mapping(target = "status", source = "status", qualifiedByName = "versionStatusToApi")
     @Mapping(target = "createdAt", source = "createdAt", qualifiedByName = "instantToOffsetDateTime")
+    @Mapping(target = "storageType", source = "storageType", qualifiedByName = "storageTypeToApi")
+    @Mapping(target = "diffPreview", source = "diffPreview")
     Version toDto(VersionEntity entity);
 
     @Mapping(target = "id", ignore = true)
@@ -31,6 +34,7 @@ public interface VersionMapper {
     @Mapping(target = "checksum", source = "req.checksum")
     @Mapping(target = "status", constant = "PENDING")
     @Mapping(target = "storageType", source = "req.isDiff", qualifiedByName = "isDiffToStorageType")
+    @Mapping(target = "diffPreview", source = "req.diffPreview")
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
@@ -55,6 +59,12 @@ public interface VersionMapper {
     @Named("isDiffToStorageType")
     default StorageType isDiffToStorageType(Boolean isDiff) {
         return Boolean.TRUE.equals(isDiff) ? StorageType.DIFF : StorageType.SNAPSHOT;
+    }
+
+    @Named("storageTypeToApi")
+    default StorageTypeEnum storageTypeToApi(StorageType storageType) {
+        if (storageType == null) return StorageTypeEnum.SNAPSHOT;
+        return StorageTypeEnum.fromValue(storageType.name());
     }
 }
 

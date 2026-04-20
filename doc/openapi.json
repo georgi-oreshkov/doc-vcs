@@ -324,6 +324,17 @@
           "checksum": {
             "type": "string"
           },
+          "storage_type": {
+            "type": "string",
+            "enum": [
+              "SNAPSHOT",
+              "DIFF"
+            ]
+          },
+          "diff_preview": {
+            "type": "string",
+            "nullable": true
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -1363,6 +1374,10 @@
                   },
                   "is_diff": {
                     "type": "boolean"
+                  },
+                  "diff_preview": {
+                    "type": "string",
+                    "nullable": true
                   }
                 }
               }

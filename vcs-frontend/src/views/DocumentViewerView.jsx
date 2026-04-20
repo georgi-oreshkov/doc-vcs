@@ -1,20 +1,25 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, Slider, ButtonGroup, Spinner } from "@heroui/react";
-import { ArrowLeft, ArrowRight, History, Download, UploadCloud, RotateCcw, Columns, AlignLeft } from 'lucide-react';
+import { Button, Slider, ButtonGroup, Spinner, useDisclosure, addToast } from "@heroui/react";
+import { ArrowLeft, History, Download, UploadCloud, RotateCcw, Columns, AlignLeft } from 'lucide-react';
 import { useDocument } from '../hooks/useDocuments';
-import { useVersions, useDiff, useVersionDownloadUrl, useRollbackVersion, useCreateVersion } from '../hooks/useVersions';
+import { useVersions, useDiff, useRollbackVersion } from '../hooks/useVersions';
 import { formatVersionNumber } from '../api/transforms';
+import { getVersionDownloadUrl } from '../api/versionsApi';
+import NewVersionModal from '../components/NewVersionModal';
 
 export default function DocumentViewerView() {
   const { docId } = useParams();
   const navigate = useNavigate();
-  const [diffMode, setDiffMode] = useState('split'); 
+  const [diffMode, setDiffMode] = useState('split');
+  const [renderedDiff, setRenderedDiff] = useState(null);
+  const [diffRendering, setDiffRendering] = useState(false);
+
+  const { isOpen: isNewVersionOpen, onOpen: onNewVersionOpen, onOpenChange: onNewVersionOpenChange } = useDisclosure();
 
   const { data: doc, isLoading: docLoading } = useDocument(docId);
   const { data: versionsData, isLoading: versionsLoading } = useVersions(docId, { page: 0, size: 100 });
   const rollback = useRollbackVersion();
-  const downloadQuery = useVersionDownloadUrl(docId, null);
 
   const versions = (versionsData?.content || versionsData || []).map((v, i) => ({
     ...v,
@@ -36,11 +41,64 @@ export default function DocumentViewerView() {
     selectedVersion?.id
   );
 
+  // Render the diff: parse the JSON payload from the server, fetch both document
+  // versions as text, then compute and display the unified diff via WASM.
+  useEffect(() => {
+    if (!diffData?.diff) {
+      setRenderedDiff(null);
+      return;
+    }
+
+    let cancelled = false;
+    setDiffRendering(true);
+    setRenderedDiff(null);
+
+    (async () => {
+      try {
+        const payload = JSON.parse(diffData.diff);
+        const { fromUrl, toUrl } = payload;
+
+        const [fromResp, toResp] = await Promise.all([fetch(fromUrl), fetch(toUrl)]);
+        if (cancelled) return;
+        const [fromText, toText] = await Promise.all([fromResp.text(), toResp.text()]);
+        if (cancelled) return;
+
+        // Lazy-load WASM
+        const wasmMod = await import('../../pkg/diff_wasm.js');
+        if (cancelled) return;
+        await wasmMod.default();
+        const diff = wasmMod.generate_unified_diff_wasm(fromText, toText);
+        if (!cancelled) setRenderedDiff(diff);
+      } catch (err) {
+        if (!cancelled) {
+          console.error('[DocumentViewer] diff rendering failed:', err);
+          setRenderedDiff(null);
+        }
+      } finally {
+        if (!cancelled) setDiffRendering(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [diffData]);
+
   const handleDownload = async () => {
     if (!selectedVersion) return;
-    const { getVersionDownloadUrl } = await import('../api/versionsApi');
-    const { download_url } = await getVersionDownloadUrl(docId, selectedVersion.id);
-    window.open(download_url, '_blank');
+    try {
+      const { download_url } = await getVersionDownloadUrl(docId, selectedVersion.id);
+      const urlStr = String(download_url ?? '');
+      if (!urlStr) {
+        addToast({
+          title: 'Document being prepared',
+          description: "The document is being reconstructed — you'll receive a notification when it's ready.",
+          color: 'primary',
+        });
+        return;
+      }
+      window.open(urlStr, '_blank');
+    } catch (err) {
+      addToast({ title: 'Download failed', description: err?.message, color: 'danger' });
+    }
   };
 
   const handleRollback = () => {
@@ -97,7 +155,7 @@ export default function DocumentViewerView() {
           </Button>
 
           {isLatest ? (
-            <Button color="primary" startContent={<UploadCloud size={18} />}>
+            <Button color="primary" startContent={<UploadCloud size={18} />} onPress={onNewVersionOpen}>
               New Version
             </Button>
           ) : (
@@ -108,7 +166,7 @@ export default function DocumentViewerView() {
         </div>
       </div>
 
-      {/* Code Viewer Area */}
+      {/* Diff Viewer Area */}
       <div className="flex-grow bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden flex flex-col relative">
         <div className="bg-zinc-900 border-b border-zinc-800 p-3 flex justify-between items-center">
           <div className="text-sm font-medium flex items-center gap-2">
@@ -123,18 +181,96 @@ export default function DocumentViewerView() {
           </ButtonGroup>
         </div>
 
-        <div className="flex-grow overflow-auto font-mono text-sm p-8 text-zinc-400 bg-zinc-950/50">
-          {diffLoading ? (
+        <div className="flex-grow overflow-auto font-mono text-sm bg-zinc-950/50">
+          {diffLoading || diffRendering ? (
             <div className="flex justify-center items-center h-full"><Spinner color="primary" /></div>
-          ) : diffData?.diff ? (
-            <pre className="whitespace-pre-wrap">{diffData.diff}</pre>
+          ) : renderedDiff ? (
+            diffMode === 'split' ? (
+              <SplitDiffView diff={renderedDiff} />
+            ) : (
+              <UnifiedDiffView diff={renderedDiff} />
+            )
           ) : (
-            <div className="flex items-center justify-center h-full text-zinc-600">
+            <div className="flex items-center justify-center h-full text-zinc-600 p-8">
               {versions.length === 0 ? 'No versions available.' : 'Select a version to see the diff.'}
             </div>
           )}
         </div>
       </div>
+
+      <NewVersionModal
+        isOpen={isNewVersionOpen}
+        onOpenChange={onNewVersionOpenChange}
+        docId={docId}
+        versions={versionsData?.content || versionsData || []}
+      />
     </div>
+  );
+}
+
+// ─── Diff Rendering Components ────────────────────────────────────────────────
+
+function lineClass(line) {
+  if (line.startsWith('+')) return 'text-emerald-400 bg-emerald-950/40';
+  if (line.startsWith('-')) return 'text-red-400 bg-red-950/40';
+  if (line.startsWith('@@')) return 'text-blue-400 bg-blue-950/20';
+  return 'text-zinc-400';
+}
+
+function UnifiedDiffView({ diff }) {
+  const lines = diff.split('\n');
+  return (
+    <table className="w-full border-collapse text-xs">
+      <tbody>
+        {lines.map((line, i) => (
+          <tr key={i} className={lineClass(line)}>
+            <td className="select-none w-12 text-right pr-4 py-0.5 text-zinc-600 border-r border-zinc-800">{i + 1}</td>
+            <td className="px-4 py-0.5 whitespace-pre">{line || ' '}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function SplitDiffView({ diff }) {
+  const lines = diff.split('\n');
+  const leftLines = [];
+  const rightLines = [];
+
+  for (const line of lines) {
+    if (line.startsWith('-')) {
+      leftLines.push(line);
+      rightLines.push(null);
+    } else if (line.startsWith('+')) {
+      leftLines.push(null);
+      rightLines.push(line);
+    } else {
+      leftLines.push(line);
+      rightLines.push(line);
+    }
+  }
+
+  const maxLen = Math.max(leftLines.length, rightLines.length);
+
+  return (
+    <table className="w-full border-collapse text-xs">
+      <tbody>
+        {Array.from({ length: maxLen }, (_, i) => {
+          const left = leftLines[i] ?? '';
+          const right = rightLines[i] ?? '';
+          return (
+            <tr key={i}>
+              <td className={`px-4 py-0.5 whitespace-pre w-1/2 border-r border-zinc-800 ${left ? lineClass(left) : 'text-zinc-700'}`}>
+                {left || ' '}
+              </td>
+              <td className={`px-4 py-0.5 whitespace-pre w-1/2 ${right ? lineClass(right) : 'text-zinc-700'}`}>
+                {right || ' '}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
