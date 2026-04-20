@@ -23,14 +23,18 @@ RUN --mount=type=cache,target=/root/.gradle,id=gradle-worker,sharing=locked \
     ./gradlew nativeCompile --no-daemon
 
 # ── Stage 2: Minimal runtime image ──────────────────────────────────────────
-# distroless/cc provides glibc + libz.so.1 + libgcc + libstdc++ — everything
-# a default (dynamically-linked) GraalVM native image needs at runtime.
-# distroless/base lacks zlib, distroless/cc adds it.
-FROM gcr.io/distroless/cc-debian12:nonroot
+# debian:12-slim has glibc, zlib, libgcc, libstdc++, NSS modules — everything
+# a dynamically-linked GraalVM native image needs, with no guesswork.
+FROM debian:12-slim
+
+RUN groupadd --gid 65532 nonroot && \
+    useradd  --uid 65532 --gid nonroot --no-create-home nonroot
 
 COPY --from=builder \
     /workspace/build/native/nativeCompile/vcs-backend-worker \
     /app/vcs-backend-worker
+
+USER nonroot
 
 # All configuration is supplied via environment variables at runtime:
 #   REDIS_HOST, REDIS_PORT
