@@ -58,10 +58,6 @@ graalvmNative {
                 // Initialise SLF4J/Logback at build time to avoid runtime class-init issues
                 "--initialize-at-build-time=org.slf4j,ch.qos.logback",
                 "-H:+ReportExceptionStackTraces",
-                // Statically link all C libraries (zlib, libgcc, libstdc++) into the binary.
-                // Only glibc remains as a dynamic dependency, which distroless/base already provides.
-                // This eliminates "cannot open shared object file: libz.so.1" errors at runtime.
-                "-H:+StaticExecutableWithDynamicLibC",
                 // Give the native-image compiler JVM more heap. The native-image process is
                 // separate from the Gradle daemon, so org.gradle.jvmargs doesn't cover it.
                 // 4 GB avoids GC pressure during the static analysis phase.
