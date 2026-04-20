@@ -23,10 +23,9 @@ RUN --mount=type=cache,target=/root/.gradle,id=gradle-worker,sharing=locked \
     ./gradlew nativeCompile --no-daemon
 
 # ── Stage 2: Minimal runtime image ──────────────────────────────────────────
-# distroless/cc provides glibc + zlib (libz.so.1) + libgcc/libstdc++ — all
-# required by GraalVM native images that link against the system zlib.
-# distroless/base omits zlib, causing "cannot open shared object file: libz.so.1".
-FROM gcr.io/distroless/cc-debian12:nonroot
+# distroless/base provides glibc — the only dynamic dependency remaining after
+# -H:+StaticExecutableWithDynamicLibC statically links zlib, libgcc, and libstdc++.
+FROM gcr.io/distroless/base-debian12:nonroot
 
 COPY --from=builder \
     /workspace/build/native/nativeCompile/vcs-backend-worker \
