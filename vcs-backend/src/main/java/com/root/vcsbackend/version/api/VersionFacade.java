@@ -4,6 +4,7 @@ import com.root.vcsbackend.shared.exception.AppException;
 import com.root.vcsbackend.version.domain.VersionEntity;
 import com.root.vcsbackend.version.domain.VersionStatus;
 import com.root.vcsbackend.version.persistence.VersionRepository;
+import com.root.vcsbackend.version.service.VersionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -21,6 +22,7 @@ import java.util.UUID;
 public class VersionFacade {
 
     private final VersionRepository versionRepository;
+    private final VersionService versionService; 
 
     public VersionEntity resolveVersion(UUID versionId) {
         return versionRepository.findById(versionId)
@@ -48,5 +50,14 @@ public class VersionFacade {
             .build();
         VersionEntity saved = versionRepository.save(version);
         return new VersionSummary(saved.getId(), saved.getVersionNumber());
+    }
+
+    // --- ADDED FOR APPROVALS TAB INTEGRATION ---
+    public void approveVersion(UUID docId, UUID versionId, UUID callerId) {
+        versionService.approveVersion(docId, versionId, callerId);
+    }
+
+    public void rejectVersion(UUID docId, UUID versionId, UUID callerId, String reason) {
+        versionService.rejectVersion(docId, versionId, callerId, null);
     }
 }

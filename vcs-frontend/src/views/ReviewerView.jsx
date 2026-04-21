@@ -19,7 +19,6 @@ export default function ReviewerView() {
 
   // Navigates directly to the document for review
   const handleViewDocument = (req) => {
-    // Falls back appropriately based on available data from the request payload
     if (req.org_id && req.doc_id) {
       navigate(`/organizations/${req.org_id}/documents/${req.doc_id}`);
     } else {

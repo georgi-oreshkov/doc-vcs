@@ -34,7 +34,7 @@ public class VersionsController implements VersionsApi {
     private final PageMapper pageMapper;
     private final SecurityHelper securityHelper;
 
-    // NEW ENDPOINT: Request a review for a specific draft version
+    // NEW: Request Review endpoint
     @PostMapping("/documents/{docId}/versions/{versionId}/request-review")
     public ResponseEntity<Void> requestReview(@PathVariable UUID docId, @PathVariable UUID versionId) {
         UUID callerId = securityHelper.currentUser().userId();
@@ -100,8 +100,7 @@ public class VersionsController implements VersionsApi {
     }
 
     @Override
-    public ResponseEntity<Void> rejectVersion(UUID docId, UUID versionId,
-                                               @Nullable RejectVersionRequest req) {
+    public ResponseEntity<Void> rejectVersion(UUID docId, UUID versionId, @Nullable RejectVersionRequest req) {
         versionService.rejectVersion(docId, versionId, securityHelper.currentUser().userId(), req);
         return ResponseEntity.ok().build();
     }
