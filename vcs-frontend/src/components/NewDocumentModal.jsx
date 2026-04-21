@@ -9,11 +9,16 @@ import {
     Input
 } from "@heroui/react";
 import { UploadCloud, FileText, X } from "lucide-react";
+import { createDocument } from '../api/documentsApi';
+import { uploadFileToS3 } from '../api/versionsApi';
+import { useOrg } from '../context/OrgContext';
 
-export default function NewDocumentModal({ isOpen, onOpenChange }) {
+export default function NewDocumentModal({ isOpen, onOpenChange, onSave, isSaving }) {
     const [title, setTitle] = useState("");
     const [file, setFile] = useState(null);
+    const [uploading, setUploading] = useState(false);
     const fileInputRef = useRef(null);
+    const { selectedOrg } = useOrg();
 
     // Function to handle file selection
     const handleFileChange = (e) => {
@@ -24,57 +29,44 @@ export default function NewDocumentModal({ isOpen, onOpenChange }) {
 
     // Function to handle saving the document (placeholder for now)
     const handleSave = async (onClose) => {
-        console.log("Saving document:", { title, file });
-        // To-Do: Implement actual upload logic here (e.g., API call)
+        if (!file || !title) {
+            console.error("Missing title or file");
+            return;
+        }
 
-        /*
-        setTitle("");
-        setFile(null);
-        onClose();
-        */
-
-        //----------------------------------------------------------------------------
-        if (!file) {
-            console.error("No file selected");
+        if (!selectedOrg?.id) {
+            console.error("No organization selected");
             return;
         }
 
         try {
-            //console.log("Starting upload...");
+            setUploading(true);
 
-            // 2. Request presigned URL from backend
-            const res = await fetch(
-                `http://localhost:8080/presign?fileName=${file.name}`//change to presign
-            );
+            // If parent component provides onSave callback, use it (e.g., DocumentsView)
+            if (onSave) {
+                await onSave({ name: title }, file, onClose);
+            } else {
+                // Otherwise, handle the upload ourselves
+                // 1. Create the document and get presigned upload URL
+                const response = await createDocument(selectedOrg.id, { name: title });
+                
+                if (!response.upload_url) {
+                    throw new Error("Failed to get presigned URL");
+                }
 
-            if (!res.ok) {
-                throw new Error("Failed to get presigned URL");
+                // 2. Upload file to S3
+                await uploadFileToS3(response.upload_url, file);
+
+                // 3. Reset UI
+                setTitle("");
+                setFile(null);
+                onClose();
             }
-
-            const uploadUrl = await res.text();
-            console.log("Presigned URL:", uploadUrl);
-
-            // 3. Upload file directly to S3
-            const uploadRes = await fetch(uploadUrl, {
-                method: "PUT",
-                body: file,
-            });
-
-            if (!uploadRes.ok) {
-                throw new Error("Upload to S3 failed");
-            }
-
-            console.log("Upload successful!");
-
-            // 4. Reset UI
-            setTitle("");
-            setFile(null);
-            onClose();
-
         } catch (error) {
             console.error("Upload error:", error);
+        } finally {
+            setUploading(false);
         }
-        //------------------------------------------------------------------------=
     };
 
     return (
@@ -143,7 +135,9 @@ export default function NewDocumentModal({ isOpen, onOpenChange }) {
                             </Button>
                             <Button 
                                 className="bg-lime-600 text-black font-bold hover:bg-lime-500 disabled:bg-zinc-800 disabled:text-zinc-600 transition-colors"
-                                onPress={() => handleSave(onClose)} isDisabled={!title || !file}
+                                onPress={() => handleSave(onClose)} 
+                                isDisabled={!title || !file}
+                                isLoading={uploading || isSaving}
                             >
                                 Upload Document
                             </Button>
