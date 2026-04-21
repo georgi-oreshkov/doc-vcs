@@ -19,6 +19,12 @@ echo "→ Configuring mc alias..."
 echo "→ Creating bucket (idempotent)..."
 "$MC" mb --ignore-existing "$ALIAS/$BUCKET"
 
+echo "→ Removing existing webhook event filter (if any)..."
+"$MC" event remove "$ALIAS/$BUCKET" "$ARN" \
+  --event put \
+  --prefix "tmp/" \
+  --suffix ".diff" 2>/dev/null || true
+
 echo "→ Binding webhook event filter (PUT on tmp/*.diff)..."
 "$MC" event add "$ALIAS/$BUCKET" "$ARN" \
   --event put \

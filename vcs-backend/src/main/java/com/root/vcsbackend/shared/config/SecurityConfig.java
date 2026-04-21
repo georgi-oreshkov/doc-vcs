@@ -71,7 +71,27 @@ public class SecurityConfig {
         return decoder;
     }
 
+    /**
+     * Dedicated security filter chain for the MinIO webhook endpoint.
+     * NO JWT processing - uses custom token validation in controller.
+     * Must be @Order(1) to take precedence over the main filter chain.
+     */
     @Bean
+    @org.springframework.core.annotation.Order(1)
+    SecurityFilterChain webhookFilterChain(HttpSecurity http) throws Exception {
+        return http
+            .securityMatcher("/internal/webhook/minio")
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            .csrf(AbstractHttpConfigurer::disable)
+            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+            .build();
+    }
+
+    /**
+     * Main security filter chain for all other endpoints - requires JWT authentication.
+     */
+    @Bean
+    @org.springframework.core.annotation.Order(2)
     SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         return http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -79,7 +99,7 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 // SSE stream uses query-param token auth (EventSource can't set headers)
-                .requestMatchers("/auth/login", "/notifications/stream", "/internal/webhook/minio").permitAll()
+                .requestMatchers("/auth/login", "/notifications/stream").permitAll()
                 .requestMatchers("/actuator/health").permitAll()
                 .anyRequest().authenticated()
             )

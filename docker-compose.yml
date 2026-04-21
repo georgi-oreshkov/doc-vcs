@@ -48,7 +48,7 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
       MINIO_NOTIFY_WEBHOOK_ENABLE_stagingdiff: "on"
       MINIO_NOTIFY_WEBHOOK_ENDPOINT_stagingdiff: "http://vcs-backend:8080/internal/webhook/minio"
-      MINIO_NOTIFY_WEBHOOK_AUTH_TOKEN_stagingdiff: "${MINIO_WEBHOOK_TOKEN}"
+      MINIO_NOTIFY_WEBHOOK_AUTH_TOKEN_stagingdiff: "${MINIO_WEBHOOK_TOKEN:-dev-minio-webhook-token}"
 
     volumes:
       - minio-data:/data
@@ -129,6 +129,7 @@ services:
       S3_REGION: ${S3_REGION:-eu-central-1}
       S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
       S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_WEBHOOK_TOKEN: ${MINIO_WEBHOOK_TOKEN:-dev-minio-webhook-token}
       # ── CORS ──────────────────────────────────────────────────────────────
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
     networks:

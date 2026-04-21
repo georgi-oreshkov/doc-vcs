@@ -51,8 +51,15 @@ public class MinioWebhookController {
             @RequestHeader(value = "Authorization", required = false) String authHeader,
             @RequestBody String body) {
 
-        if (expectedToken.isBlank() || !expectedToken.equals(authHeader)) {
-            log.warn("MinIO webhook rejected — invalid or missing Authorization token");
+        // MinIO may send the token with or without "Bearer " prefix
+        String receivedToken = authHeader;
+        if (receivedToken != null && receivedToken.startsWith("Bearer ")) {
+            receivedToken = receivedToken.substring(7); // Remove "Bearer " prefix
+        }
+        
+        if (expectedToken.isBlank() || !expectedToken.equals(receivedToken)) {
+            log.warn("MinIO webhook rejected — invalid or missing Authorization token (received: {})", 
+                    authHeader != null ? (authHeader.length() > 20 ? authHeader.substring(0, 20) + "..." : authHeader) : "null");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
