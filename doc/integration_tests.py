@@ -17,6 +17,8 @@ Optional environment variables:
     KEYCLOAK_URL          default: http://localhost:18080
     REDIS_HOST            default: localhost
     REDIS_PORT            default: 16379
+    EXPECTED_DOWNLOAD_HOSTS  Comma-separated hostnames expected in presigned
+                             download URLs. Default: host from BACKEND_URL.
     MINIO_WEBHOOK_TOKEN   If set, used as fallback to manually trigger MinIO webhook
                           when auto-webhook doesn't fire within the polling window.
 """
@@ -28,7 +30,8 @@ import os
 import re
 import sys
 import time
-from typing import Optional
+from typing import Optional, Set
+from urllib.parse import urlparse
 
 try:
     import requests
@@ -50,6 +53,7 @@ BACKEND_URL        = os.getenv("BACKEND_URL", "http://localhost:8080")
 KEYCLOAK_URL       = os.getenv("KEYCLOAK_URL", "http://localhost:18080")
 REDIS_HOST         = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT         = int(os.getenv("REDIS_PORT", "16379"))
+EXPECTED_DOWNLOAD_HOSTS = os.getenv("EXPECTED_DOWNLOAD_HOSTS", "")
 MINIO_WEBHOOK_TOKEN = os.getenv("MINIO_WEBHOOK_TOKEN", "")
 
 REDIS_STREAM         = "vcs.diff.jobs"
@@ -112,6 +116,35 @@ def assert_truthy(name: str, value, detail: str = "") -> bool:
         ok(f"{name}{': ' + detail if detail else ''}")
         return True
     fail(f"{name}: expected truthy, got {value!r}")
+    return False
+
+
+def expected_download_hosts() -> Set[str]:
+    configured = {
+        host.strip().lower()
+        for host in EXPECTED_DOWNLOAD_HOSTS.split(",")
+        if host.strip()
+    }
+    if configured:
+        return configured
+
+    backend_host = (urlparse(BACKEND_URL).hostname or "").strip().lower()
+    return {backend_host} if backend_host else set()
+
+
+def assert_browser_reachable_download_url(name: str, url: str) -> bool:
+    host = (urlparse(str(url)).hostname or "").strip().lower()
+    if not host:
+        fail(f"{name}: invalid URL host in {url!r}")
+        return False
+
+    expected_hosts = expected_download_hosts()
+    if not expected_hosts or host in expected_hosts:
+        ok(f"{name}: host={host}")
+        return True
+
+    fail(f"{name}: host '{host}' is not in expected browser hosts {sorted(expected_hosts)}")
+    log("  Hint: set S3_PUBLIC_ENDPOINT for backend/worker or override EXPECTED_DOWNLOAD_HOSTS.", YELLOW)
     return False
 
 
@@ -342,6 +375,7 @@ def run() -> bool:
     log(f"  Backend  : {BACKEND_URL}")
     log(f"  Keycloak : {KEYCLOAK_URL}  (user={KEYCLOAK_USER})")
     log(f"  Redis    : {REDIS_HOST}:{REDIS_PORT}  stream={REDIS_STREAM}")
+    log(f"  Download hosts expected: {sorted(expected_download_hosts())}")
     if not REDIS_AVAILABLE:
         log("  WARNING  : redis-py not installed — Redis checks disabled", YELLOW)
 
@@ -418,11 +452,12 @@ def run() -> bool:
         assert_status("v1 download URL", resp.status_code, [200, 202])
         dl_url = str(resp.json().get("download_url", ""))
         if dl_url:
-            dl = requests.get(dl_url, timeout=15)
-            if dl.ok:
-                ok(f"v1 content downloaded ({len(dl.content)} bytes)")
-            else:
-                fail(f"v1 download failed: HTTP {dl.status_code}")
+            if assert_browser_reachable_download_url("v1 download URL host", dl_url):
+                dl = requests.get(dl_url, timeout=15)
+                if dl.ok:
+                    ok(f"v1 content downloaded ({len(dl.content)} bytes)")
+                else:
+                    fail(f"v1 download failed: HTTP {dl.status_code}")
         else:
             skip("v1 download URL empty (version may be DIFF-stored)")
 
@@ -476,7 +511,7 @@ def run() -> bool:
             # Fallback: trigger the webhook manually using MINIO_WEBHOOK_TOKEN
             version_number = extract_version_number_from_url(v2_upload_url)
             if MINIO_WEBHOOK_TOKEN and version_number and doc_id:
-                log(f"\n  Fallback: manually calling /internal/webhook/minio …", CYAN)
+                log("\n  Fallback: manually calling /internal/webhook/minio …", CYAN)
                 if trigger_webhook_manually(doc_id, version_number, MINIO_WEBHOOK_TOKEN):
                     log("  Manual webhook call accepted", GREEN)
                     verify_task_appeared = wait_for_stream_growth(r, pre_diff_len, timeout=5)
@@ -543,6 +578,10 @@ def run() -> bool:
         else:
             ok("200 OK — immediate download URL (SNAPSHOT or already reconstructed)")
 
+        immediate_dl_url = str(resp.json().get("download_url", ""))
+        if immediate_dl_url:
+            assert_browser_reachable_download_url("v2 immediate download URL host", immediate_dl_url)
+
         # Check Redis for RECONSTRUCT_DOCUMENT task
         if r:
             grew = wait_for_stream_growth(r, pre_recon_len, timeout=10)
@@ -570,22 +609,23 @@ def run() -> bool:
                 payload = json.loads(raw) if isinstance(raw, str) else raw
             except Exception:
                 payload = {}
-            dl_url = payload.get("presignedDownloadUrl", "")
+            dl_url = payload.get("presignedDownloadUrl", "") or payload.get("downloadUrl", "")
             if dl_url:
-                dl = requests.get(str(dl_url), timeout=15)
-                if dl.ok:
-                    ok(f"Reconstructed v2 downloaded ({len(dl.content)} bytes)")
-                    reconstructed = dl.text
-                    # Check content matches expected v2 (after worker normalisation)
-                    expected_v2 = normalize_for_worker(V2_CONTENT).decode("utf-8")
-                    if reconstructed == expected_v2:
-                        ok("Reconstructed content matches expected v2 exactly ✓")
-                    elif reconstructed.strip() == expected_v2.strip():
-                        ok("Reconstructed content matches v2 (modulo whitespace)")
+                if assert_browser_reachable_download_url("reconstructed download URL host", str(dl_url)):
+                    dl = requests.get(str(dl_url), timeout=15)
+                    if dl.ok:
+                        ok(f"Reconstructed v2 downloaded ({len(dl.content)} bytes)")
+                        reconstructed = dl.text
+                        # Check content matches expected v2 (after worker normalisation)
+                        expected_v2 = normalize_for_worker(V2_CONTENT).decode("utf-8")
+                        if reconstructed == expected_v2:
+                            ok("Reconstructed content matches expected v2 exactly ✓")
+                        elif reconstructed.strip() == expected_v2.strip():
+                            ok("Reconstructed content matches v2 (modulo whitespace)")
+                        else:
+                            skip("Content mismatch — normalization may differ from expected")
                     else:
-                        skip("Content mismatch — normalization may differ from expected")
-                else:
-                    fail(f"Reconstructed download failed: HTTP {dl.status_code}")
+                        fail(f"Reconstructed download failed: HTTP {dl.status_code}")
             else:
                 skip("presignedDownloadUrl missing from notification payload")
         else:

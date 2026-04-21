@@ -37,7 +37,7 @@ public class S3Config {
 
     @Bean
     S3Presigner s3Presigner(S3Properties properties) {
-        URI endpoint = endpointUri(properties.endpoint());
+        URI endpoint = endpointUri(resolvePresignEndpoint(properties));
 
         return S3Presigner.builder()
                 .endpointOverride(endpoint)
@@ -55,6 +55,14 @@ public class S3Config {
 
     private URI endpointUri(String endpoint) {
         return URI.create(endpoint.trim());
+    }
+
+    private String resolvePresignEndpoint(S3Properties properties) {
+        String publicEndpoint = properties.publicEndpoint();
+        if (publicEndpoint != null && !publicEndpoint.isBlank()) {
+            return publicEndpoint;
+        }
+        return properties.endpoint();
     }
 }
 

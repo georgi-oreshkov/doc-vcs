@@ -138,14 +138,32 @@ function waitForReconstructedUrl(docId, timeoutMs = 15000) {
       reject(new Error('timeout'));
     }, timeoutMs);
 
+    const parsePayload = (rawPayload) => {
+      if (!rawPayload) return null;
+      if (typeof rawPayload === 'object') return rawPayload;
+      if (typeof rawPayload === 'string') {
+        try {
+          return JSON.parse(rawPayload);
+        } catch {
+          return null;
+        }
+      }
+      return null;
+    };
+
     stream = connectNotificationsStream((event) => {
+      const payload = parsePayload(event?.payload);
       if (
         event?.type === 'DOCUMENT_RECONSTRUCTED' &&
-        event?.payload?.docId === String(docId)
+        payload?.docId === String(docId)
       ) {
+        const reconstructedUrl = payload.downloadUrl ?? payload.presignedDownloadUrl ?? null;
+        if (!reconstructedUrl) {
+          return;
+        }
         clearTimeout(timer);
         stream?.close?.();
-        resolve(event.payload.downloadUrl);
+        resolve(reconstructedUrl);
       }
     });
   });
