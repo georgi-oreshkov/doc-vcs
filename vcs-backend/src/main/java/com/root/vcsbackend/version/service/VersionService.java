@@ -75,13 +75,25 @@ public class VersionService {
 
         // ДОБАВЕНО: Извличане на orgId и подаване към payload-а
         UUID orgId = documentFacade.resolveOrgId(docId);
-        events.publishEvent(new NotificationEvent(this, callerId, "VERSION_UPLOADED",
-            Map.of(
-                "documentId", docId, 
-                "organizationId", orgId, 
+        Map<String, Object> uploadPayload = Map.of(
+                "documentId", docId,
+                "organizationId", orgId,
                 "versionId", version.getId(),
                 "message", "New version uploaded for review."
-            )));
+        );
+        events.publishEvent(new NotificationEvent(this, callerId, "VERSION_UPLOADED", uploadPayload));
+
+        // Notify assigned reviewers when a non-draft version is submitted for review
+        if (Boolean.FALSE.equals(version.getIsDraft())) {
+            Map<String, Object> reviewPayload = Map.of(
+                    "documentId", docId,
+                    "organizationId", orgId,
+                    "versionId", version.getId(),
+                    "message", "A new version is waiting for your review."
+            );
+            documentFacade.getReviewerIds(docId).forEach(reviewerId ->
+                    events.publishEvent(new NotificationEvent(this, reviewerId, "VERSION_PENDING_REVIEW", reviewPayload)));
+        }
 
         String s3Key = (nextNumber > 1 && req.getIsDiff())? S3KeyTemplates.stagingDiff(docId,nextNumber) : S3KeyTemplates.permanentVersion(docId, nextNumber);
         return new S3UploadResponse().uploadUrl(java.net.URI.create(s3PresignService.generateUploadUrl(s3Key)));

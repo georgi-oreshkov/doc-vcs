@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -53,6 +54,11 @@ public class DocumentFacade {
     /** Returns the author ID without exposing {@link DocumentEntity}. */
     public UUID getAuthorId(UUID docId) {
         return resolveDocument(docId).getAuthorId();
+    }
+
+    /** Returns the reviewer IDs assigned to the document. */
+    public List<UUID> getReviewerIds(UUID docId) {
+        return resolveDocument(docId).getReviewerIds();
     }
 
     // ── Write ────────────────────────────────────────────────────────────────

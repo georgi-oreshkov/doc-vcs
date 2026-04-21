@@ -6,6 +6,7 @@ import com.root.vcsbackend.notification.sse.SseEmitterRegistry;
 import com.root.vcsbackend.shared.security.CurrentUser;
 import com.root.vcsbackend.shared.security.JwtPrincipal;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +25,7 @@ import java.util.UUID;
  * that all notification-related routes live in a single controller, but they could be added to
  * the spec in a future iteration to enable client codegen consistency.
  */
+@Slf4j
 @RestController
 @RequestMapping("/notifications")
 @RequiredArgsConstructor
@@ -44,8 +46,13 @@ public class NotificationController {
         UUID userId = principal.userId();
         SseEmitter emitter = registry.register(userId);
         // Flush unread after registering so they reach this emitter
-        notificationService.getUnread(userId)
-            .forEach(n -> registry.send(userId, n));
+        try {
+            notificationService.getUnread(userId)
+                .forEach(n -> registry.send(userId, n));
+        } catch (Exception e) {
+            log.warn("Failed to flush unread notifications for userId={}: {}", userId, e.getMessage());
+            // Non-fatal: the emitter is still active for future events
+        }
         return emitter;
     }
 

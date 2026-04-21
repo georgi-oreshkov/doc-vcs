@@ -1,0 +1,3 @@
+- request flows dont work. reviewers cant review anything, when i add a version to be reviewed, the status updates successfully but no request reaches the client.
+here is an arror with that:
+org.springframework.http.converter.HttpMessageNotWritableException: No converter for [class com.root.vcsbackend.model.ErrorResponse] with preset Content-Type 'text/event-stream'
