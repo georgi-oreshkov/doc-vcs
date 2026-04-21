@@ -55,6 +55,9 @@ graalvmNative {
             buildArgs.addAll(
                 // Fail the build if any class cannot be compiled to native — never fall back to JVM
                 "--no-fallback",
+                // AWS SDK S3 endpoint rules parse custom endpoints via java.net.URL.
+                // Native-image must include HTTP(S) URL protocol handlers.
+                "--enable-url-protocols=http,https",
                 // Initialise SLF4J/Logback at build time to avoid runtime class-init issues
                 "--initialize-at-build-time=org.slf4j,ch.qos.logback",
                 "-H:+ReportExceptionStackTraces",
