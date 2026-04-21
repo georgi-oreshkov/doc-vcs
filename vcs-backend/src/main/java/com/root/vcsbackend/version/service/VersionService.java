@@ -7,6 +7,7 @@ import com.root.vcsbackend.model.GetVersionDownloadUrl200Response;
 import com.root.vcsbackend.model.RejectVersionRequest;
 import com.root.vcsbackend.model.S3UploadResponse;
 import com.root.vcsbackend.notification.api.NotificationEvent;
+import com.root.vcsbackend.organization.api.OrganizationFacade;
 import com.root.vcsbackend.shared.exception.AppException;
 import com.root.vcsbackend.shared.redis.DiffTaskPublisher;
 import com.root.vcsbackend.shared.redis.message.ReconstructTaskMessage;
@@ -50,10 +51,9 @@ public class VersionService {
     private final ApplicationEventPublisher events;
     private final DocumentFacade documentFacade;
     private final VersionMapper versionMapper;
-    /** Used for fine-grained role checks inside approve/reject/rollback. */
     private final OrgRoleLookup orgRoleLookup;
-    /** Publishes worker tasks (verify / reconstruct) to Redis. */
     private final DiffTaskPublisher diffTaskPublisher;
+    private final OrganizationFacade organizationFacade; // NEW: Added to fetch reviewers
 
     @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
     public S3UploadResponse createVersion(UUID docId, CreateVersionRequest req, UUID callerId) {
@@ -64,39 +64,59 @@ public class VersionService {
             .orElse(1);
 
         VersionEntity version = versionMapper.toEntity(req, docId, nextNumber);
+        
+        // NEW: Force every newly uploaded version to be a DRAFT by default
+        version.setIsDraft(true);
+        version.setStatus(VersionStatus.DRAFT);
+        
         version = versionRepository.save(version);
-
         documentFacade.updateLatestVersionId(docId, version.getId());
 
-        // Submitting a non-draft version puts the document into review
-        if (Boolean.FALSE.equals(version.getIsDraft())) {
-            documentFacade.updateStatusToPendingReview(docId);
-        }
-
-        // ДОБАВЕНО: Извличане на orgId и подаване към payload-а
         UUID orgId = documentFacade.resolveOrgId(docId);
         Map<String, Object> uploadPayload = Map.of(
                 "documentId", docId,
                 "organizationId", orgId,
                 "versionId", version.getId(),
-                "message", "New version uploaded for review."
+                "message", "New draft version uploaded successfully."
         );
         events.publishEvent(new NotificationEvent(this, callerId, "VERSION_UPLOADED", uploadPayload));
 
-        // Notify assigned reviewers when a non-draft version is submitted for review
-        if (Boolean.FALSE.equals(version.getIsDraft())) {
-            Map<String, Object> reviewPayload = Map.of(
-                    "documentId", docId,
-                    "organizationId", orgId,
-                    "versionId", version.getId(),
-                    "message", "A new version is waiting for your review."
-            );
-            documentFacade.getReviewerIds(docId).forEach(reviewerId ->
-                    events.publishEvent(new NotificationEvent(this, reviewerId, "VERSION_PENDING_REVIEW", reviewPayload)));
-        }
-
         String s3Key = (nextNumber > 1 && req.getIsDiff())? S3KeyTemplates.stagingDiff(docId,nextNumber) : S3KeyTemplates.permanentVersion(docId, nextNumber);
         return new S3UploadResponse().uploadUrl(java.net.URI.create(s3PresignService.generateUploadUrl(s3Key)));
+    }
+
+    // NEW METHOD: Used by authors to request a review on a draft version
+    @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
+    public void requestReview(UUID docId, UUID versionId, UUID callerId) {
+        VersionEntity version = resolveAndValidate(docId, versionId);
+        if (!Boolean.TRUE.equals(version.getIsDraft()) || version.getStatus() != VersionStatus.DRAFT) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Only DRAFT versions can be submitted for review.");
+        }
+
+        UUID orgId = documentFacade.resolveOrgId(docId);
+
+        // Update version to PENDING (reviewing)
+        version.setIsDraft(false);
+        version.setStatus(VersionStatus.PENDING);
+        versionRepository.save(version);
+
+        // Update document status
+        documentFacade.updateStatusToPendingReview(docId);
+
+        // Notify all ADMINS and REVIEWERS in the org
+        Map<String, Object> reviewPayload = Map.of(
+                "documentId", docId,
+                "organizationId", orgId,
+                "versionId", version.getId(),
+                "message", "A new version has been submitted and is waiting for your review."
+        );
+
+        organizationFacade.getReviewersAndAdmins(orgId).forEach(reviewerId -> {
+            // Do not send a review request to the author themselves if they happen to be an admin
+            if (!reviewerId.equals(callerId)) {
+                events.publishEvent(new NotificationEvent(this, reviewerId, "VERSION_PENDING_REVIEW", reviewPayload));
+            }
+        });
     }
 
     @Transactional(readOnly = true)
@@ -129,8 +149,6 @@ public class VersionService {
         documentFacade.updateStatusToApproved(docId);
 
         UUID authorId = documentFacade.getAuthorId(docId);
-        
-        // ДОБАВЕНО: Изпращане на documentId и organizationId
         events.publishEvent(new NotificationEvent(this, authorId, "VERSION_APPROVED",
             Map.of(
                 "documentId", docId, 
@@ -160,8 +178,6 @@ public class VersionService {
         }
 
         UUID authorId = documentFacade.getAuthorId(docId);
-        
-        // ДОБАВЕНО: Изпращане на documentId и organizationId
         events.publishEvent(new NotificationEvent(this, authorId, "VERSION_REJECTED",
             Map.of(
                 "documentId", docId, 
@@ -185,11 +201,6 @@ public class VersionService {
         return commentRepository.findByVersionIdOrderByCreatedAtAsc(versionId);
     }
 
-    /**
-     * Called by {@link MinioWebhookController} after a staging diff file lands in S3.
-     * Publishes a {@code VERIFY_DIFF} task so the worker validates the diff's checksum
-     * and moves the file to the permanent key on success.
-     */
     @Transactional(readOnly = true)
     public void handleStagingDiffUploaded(UUID docId, int versionNumber) {
         VersionEntity version = versionRepository.findByDocIdAndVersionNumber(docId, versionNumber)
@@ -197,14 +208,10 @@ public class VersionService {
                         "Version not found: docId=%s versionNumber=%d".formatted(docId, versionNumber)));
 
         if (version.getStorageType() != StorageType.DIFF) {
-            log.warn("Staging-diff webhook fired for non-DIFF version — ignoring: docId={}, versionNumber={}",
-                    docId, versionNumber);
             return;
         }
 
         if (version.getCreatedBy() == null) {
-            log.warn("Version has no createdBy, cannot determine recipient: docId={}, versionId={}",
-                    docId, version.getId());
             return;
         }
 
@@ -217,23 +224,8 @@ public class VersionService {
                         .expectedChecksum(version.getChecksum())
                         .newVersionNumber(versionNumber)
                         .build());
-
-        log.debug("VERIFY_DIFF task published: docId={}, versionId={}, versionNumber={}",
-                docId, version.getId(), versionNumber);
     }
 
-
-    /**
-     * Returns a presigned download URL for the version's content.
-     * <p>
-     * If the version is stored as a full {@code SNAPSHOT}, the URL points to the
-     * full document and the client can download it immediately.
-     * <p>
-     * If the version is stored as a {@code DIFF}, this method triggers an async
-     * reconstruction via the worker. The reconstructed document's presigned URL
-     * will arrive via SSE ({@code DOCUMENT_RECONSTRUCTED} notification). In the
-     * meantime the returned URL points to the raw diff file in S3.
-     */
     @Transactional(readOnly = true)
     @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
     public DownloadUrlResult getDownloadUrl(UUID docId, UUID versionId, UUID callerId) {
@@ -262,22 +254,6 @@ public class VersionService {
         return new DownloadUrlResult(response, reconstructionDispatched);
     }
 
-
-    /**
-     * Computes a diff response between two versions of the same document.
-     * <p>
-     * For each version:
-     * <ul>
-     *   <li><b>SNAPSHOT</b> — a presigned download URL is generated directly.</li>
-     *   <li><b>DIFF</b> — an async reconstruction is triggered via Redis so the
-     *       worker assembles the full document. The presigned URL will arrive via
-     *       SSE ({@code DOCUMENT_RECONSTRUCTED}). Meanwhile, the raw diff URL is
-     *       returned.</li>
-     * </ul>
-     * The {@code diff} field in the response contains a JSON object with
-     * {@code fromUrl} and {@code toUrl} presigned download URLs and metadata so
-     * the client can fetch both versions and render the diff in the UI.
-     */
     @Transactional(readOnly = true)
     @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
     public DiffResponse getDiff(UUID docId, UUID fromId, UUID toId, UUID callerId) {
@@ -320,13 +296,6 @@ public class VersionService {
         return rollback;
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    /**
-     * Returns a presigned download URL for a version's S3 object.
-     * If the version is stored as a DIFF, also triggers async reconstruction
-     * so the full-document URL will arrive via SSE later.
-     */
     private String presignOrReconstruct(UUID docId, VersionEntity version, UUID callerId) {
         if (version.getStorageType() == StorageType.DIFF) {
             diffTaskPublisher.publish(

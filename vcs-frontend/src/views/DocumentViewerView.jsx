@@ -1,16 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, Slider, ButtonGroup, Spinner, useDisclosure, addToast } from "@heroui/react";
-import { ArrowLeft, History, Download, UploadCloud, RotateCcw, Columns, AlignLeft } from 'lucide-react';
+import { ArrowLeft, History, Download, UploadCloud, RotateCcw, Columns, AlignLeft, Send } from 'lucide-react';
 import { useDocument } from '../hooks/useDocuments';
 import { useVersions, useDiff, useRollbackVersion } from '../hooks/useVersions';
 import { formatVersionNumber } from '../api/transforms';
-import { getVersionDownloadUrl } from '../api/versionsApi';
+import { getVersionDownloadUrl, requestReview } from '../api/versionsApi';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import NewVersionModal from '../components/NewVersionModal';
 
 export default function DocumentViewerView() {
   const { docId } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [diffMode, setDiffMode] = useState('split');
   const [renderedDiff, setRenderedDiff] = useState(null);
   const [diffRendering, setDiffRendering] = useState(false);
@@ -39,14 +41,26 @@ export default function DocumentViewerView() {
   const prevVersion = effectiveIndex > 0 ? versions[effectiveIndex - 1] : null;
   const isLatest = effectiveIndex === versions.length - 1;
 
+  // NEW: Mutation for requesting a review
+  const reviewMutation = useMutation({
+    mutationFn: () => requestReview(docId, selectedVersion.id),
+    onSuccess: () => {
+      addToast({ title: 'Review Requested', description: 'Reviewers have been notified.', color: 'success' });
+      // Invalidate both queries to refresh the document status and versions table
+      queryClient.invalidateQueries(['versions', docId]);
+      queryClient.invalidateQueries(['document', docId]);
+    },
+    onError: (err) => {
+      addToast({ title: 'Failed to request review', description: err?.message, color: 'danger' });
+    }
+  });
+
   const { data: diffData, isLoading: diffLoading } = useDiff(
     docId,
     prevVersion?.id,
     selectedVersion?.id
   );
 
-  // Render the diff: parse the JSON payload from the server, fetch both document
-  // versions as text, then compute and display the unified diff via WASM.
   useEffect(() => {
     if (!diffData?.diff) {
       setRenderedDiff(null);
@@ -68,7 +82,6 @@ export default function DocumentViewerView() {
         const [fromText, toText] = await Promise.all([fromResp.text(), toResp.text()]);
         if (cancelled) return;
 
-        // Lazy-load WASM
         const wasmMod = await import('../../pkg/diff_wasm.js');
         if (cancelled) return;
         await wasmMod.default();
@@ -87,8 +100,6 @@ export default function DocumentViewerView() {
     return () => { cancelled = true; };
   }, [diffData]);
 
-  // When viewing v1 (no previous version), fetch the document content and show
-  // the first ~15 lines as a preview since there is no diff to display.
   const isV1 = effectiveIndex === 0 && versions.length > 0;
   const selectedVersionId = selectedVersion?.id;
 
@@ -185,11 +196,31 @@ export default function DocumentViewerView() {
         <div className="w-full lg:w-auto flex flex-wrap gap-3 justify-end items-center mt-4 lg:mt-0">
           {selectedVersion && (
             <div className="text-right mr-4 hidden sm:block">
-              <div className="text-sm font-bold text-white">Viewing: {selectedVersion.label}</div>
+              <div className="text-sm font-bold text-white flex items-center gap-2 justify-end">
+                Viewing: {selectedVersion.label}
+                {selectedVersion.status === 'DRAFT' && (
+                  <span className="bg-default-500/20 text-default-400 text-[10px] px-2 py-0.5 rounded uppercase">Draft</span>
+                )}
+                {selectedVersion.status === 'PENDING' && (
+                  <span className="bg-warning-500/20 text-warning-400 text-[10px] px-2 py-0.5 rounded uppercase">Reviewing</span>
+                )}
+              </div>
               <div className="text-xs text-zinc-500 truncate max-w-[200px]">{selectedVersion.msg}</div>
             </div>
           )}
           
+          {/* NEW: Request Review Button (Visible only if version is DRAFT) */}
+          {selectedVersion?.status === 'DRAFT' && (
+            <Button 
+              color="secondary" 
+              startContent={<Send size={16} />} 
+              onPress={() => reviewMutation.mutate()} 
+              isLoading={reviewMutation.isPending}
+            >
+              Request Review
+            </Button>
+          )}
+
           <Button variant="bordered" className="border-zinc-700 text-zinc-300" startContent={<Download size={18} />} onPress={handleDownload}>
             Download
           </Button>
@@ -206,7 +237,6 @@ export default function DocumentViewerView() {
         </div>
       </div>
 
-      {/* Diff Viewer Area */}
       <div className="flex-grow bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden flex flex-col relative">
         <div className="bg-zinc-900 border-b border-zinc-800 p-3 flex justify-between items-center">
           <div className="text-sm font-medium flex items-center gap-2">
@@ -249,8 +279,6 @@ export default function DocumentViewerView() {
     </div>
   );
 }
-
-// ─── Diff Rendering Components ────────────────────────────────────────────────
 
 function lineClass(line) {
   if (line.startsWith('+')) return 'text-emerald-400 bg-emerald-950/40';

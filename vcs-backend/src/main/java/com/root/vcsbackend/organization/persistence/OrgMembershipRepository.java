@@ -18,6 +18,8 @@ public interface OrgMembershipRepository extends JpaRepository<OrgMembershipEnti
     List<OrgMembershipEntity> findByOrgId(UUID orgId);
 
     List<OrgMembershipEntity> findByUserId(UUID userId);
+    
+    List<OrgMembershipEntity> findByOrgIdAndRoleIn(UUID orgId, List<OrgMembershipEntity.OrgRole> roles);
 
     @Modifying
     @Transactional

@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -36,5 +37,15 @@ public class OrganizationFacade {
         return orgMembershipRepository.findByOrgIdAndUserId(orgId, userId)
             .map(m -> Arrays.asList(roleNames).contains(m.getRole().name()))
             .orElse(false);
+    }
+
+    /**
+     * Fetches the User IDs of all members with ADMIN or REVIEWER roles in the organization.
+     */
+    public List<UUID> getReviewersAndAdmins(UUID orgId) {
+        return orgMembershipRepository.findByOrgIdAndRoleIn(orgId, Arrays.asList(OrgRole.ADMIN, OrgRole.REVIEWER))
+            .stream()
+            .map(OrgMembershipEntity::getUserId)
+            .toList();
     }
 }

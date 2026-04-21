@@ -17,8 +17,14 @@ export default function ReviewerView() {
     actionReq.mutate({ requestId: id, data: { approve: false } });
   };
 
+  // Navigates directly to the document for review
   const handleViewDocument = (req) => {
-    navigate(`/documents/${req.doc_id}`);
+    // Falls back appropriately based on available data from the request payload
+    if (req.org_id && req.doc_id) {
+      navigate(`/organizations/${req.org_id}/documents/${req.doc_id}`);
+    } else {
+      navigate(`/documents/${req.doc_id}`);
+    }
   };
 
   return (

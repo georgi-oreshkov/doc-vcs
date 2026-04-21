@@ -18,6 +18,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.jspecify.annotations.Nullable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -31,6 +33,14 @@ public class VersionsController implements VersionsApi {
     private final VersionMapper versionMapper;
     private final PageMapper pageMapper;
     private final SecurityHelper securityHelper;
+
+    // NEW ENDPOINT: Request a review for a specific draft version
+    @PostMapping("/documents/{docId}/versions/{versionId}/request-review")
+    public ResponseEntity<Void> requestReview(@PathVariable UUID docId, @PathVariable UUID versionId) {
+        UUID callerId = securityHelper.currentUser().userId();
+        versionService.requestReview(docId, versionId, callerId);
+        return ResponseEntity.ok().build();
+    }
 
     @Override
     public ResponseEntity<Comment> addComment(UUID docId, UUID versionId, AddCommentRequest req) {
@@ -71,7 +81,6 @@ public class VersionsController implements VersionsApi {
         HttpStatus status = result.reconstructionDispatched() ? HttpStatus.ACCEPTED : HttpStatus.OK;
         return ResponseEntity.status(status).body(result.response());
     }
-
 
     @Override
     public ResponseEntity<List<Comment>> listComments(UUID docId, UUID versionId) {

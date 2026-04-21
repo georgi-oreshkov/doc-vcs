@@ -22,6 +22,10 @@ export const approveVersion = (docId, versionId) =>
 export const rejectVersion = (docId, versionId, data = {}) =>
   api.post(`/documents/${docId}/versions/${versionId}/reject`, data).then((r) => r.data);
 
+// NEW: Call the backend endpoint to request a review
+export const requestReview = (docId, versionId) =>
+  api.post(`/documents/${docId}/versions/${versionId}/request-review`).then((r) => r.data);
+
 export const getDiff = (docId, fromVersionId, toVersionId) =>
   api.get(`/documents/${docId}/versions/diff`, {
     params: { from: fromVersionId, to: toVersionId },

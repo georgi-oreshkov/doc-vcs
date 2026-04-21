@@ -1,5 +1,5 @@
 package com.root.vcsbackend.version.domain;
 
 public enum VersionStatus {
-    PENDING, APPROVED, REJECTED
+    PENDING, APPROVED, REJECTED, DRAFT
 }
