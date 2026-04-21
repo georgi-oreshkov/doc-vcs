@@ -31,7 +31,7 @@ dependencies {
     implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
     // AWS SDK BOM keeps s3 + url-connection-client on the same version
-    implementation(platform("software.amazon.awssdk:bom:2.32.26"))
+    implementation(platform("software.amazon.awssdk:bom:2.34.0"))
     implementation("software.amazon.awssdk:s3")
     // Explicit sync HTTP client — lighter than Apache/Netty, required for native image
     implementation("software.amazon.awssdk:url-connection-client")
