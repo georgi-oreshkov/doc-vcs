@@ -73,8 +73,15 @@ public class VersionService {
             documentFacade.updateStatusToPendingReview(docId);
         }
 
+        // ДОБАВЕНО: Извличане на orgId и подаване към payload-а
+        UUID orgId = documentFacade.resolveOrgId(docId);
         events.publishEvent(new NotificationEvent(this, callerId, "VERSION_UPLOADED",
-            Map.of("docId", docId, "versionId", version.getId())));
+            Map.of(
+                "documentId", docId, 
+                "organizationId", orgId, 
+                "versionId", version.getId(),
+                "message", "New version uploaded for review."
+            )));
 
         String s3Key = (nextNumber > 1 && req.getIsDiff())? S3KeyTemplates.stagingDiff(docId,nextNumber) : S3KeyTemplates.permanentVersion(docId, nextNumber);
         return new S3UploadResponse().uploadUrl(java.net.URI.create(s3PresignService.generateUploadUrl(s3Key)));
@@ -99,7 +106,9 @@ public class VersionService {
         if (version.getStatus() != VersionStatus.PENDING) {
             throw new AppException(HttpStatus.CONFLICT, "Only PENDING versions can be approved");
         }
-        requireRole(documentFacade.resolveOrgId(docId), callerId, "REVIEWER", "ADMIN");
+        
+        UUID orgId = documentFacade.resolveOrgId(docId);
+        requireRole(orgId, callerId, "REVIEWER", "ADMIN");
 
         version.setStatus(VersionStatus.APPROVED);
         version.setIsDraft(false);
@@ -108,8 +117,15 @@ public class VersionService {
         documentFacade.updateStatusToApproved(docId);
 
         UUID authorId = documentFacade.getAuthorId(docId);
+        
+        // ДОБАВЕНО: Изпращане на documentId и organizationId
         events.publishEvent(new NotificationEvent(this, authorId, "VERSION_APPROVED",
-            Map.of("docId", docId, "versionId", versionId)));
+            Map.of(
+                "documentId", docId, 
+                "organizationId", orgId, 
+                "versionId", versionId,
+                "message", "Your version was approved."
+            )));
     }
 
     @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
@@ -118,7 +134,9 @@ public class VersionService {
         if (version.getStatus() != VersionStatus.PENDING) {
             throw new AppException(HttpStatus.CONFLICT, "Only PENDING versions can be rejected");
         }
-        requireRole(documentFacade.resolveOrgId(docId), callerId, "REVIEWER", "ADMIN");
+        
+        UUID orgId = documentFacade.resolveOrgId(docId);
+        requireRole(orgId, callerId, "REVIEWER", "ADMIN");
 
         version.setStatus(VersionStatus.REJECTED);
         versionRepository.save(version);
@@ -130,8 +148,15 @@ public class VersionService {
         }
 
         UUID authorId = documentFacade.getAuthorId(docId);
+        
+        // ДОБАВЕНО: Изпращане на documentId и organizationId
         events.publishEvent(new NotificationEvent(this, authorId, "VERSION_REJECTED",
-            Map.of("docId", docId, "versionId", versionId)));
+            Map.of(
+                "documentId", docId, 
+                "organizationId", orgId, 
+                "versionId", versionId,
+                "message", "Your version was rejected."
+            )));
     }
 
     @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
@@ -279,7 +304,7 @@ public class VersionService {
             .build());
 
         documentFacade.updateLatestVersionId(docId, rollback.getId());
-        documentFacade.updateStatusToPendingReview(docId); // rollback always submits for review
+        documentFacade.updateStatusToPendingReview(docId); 
         return rollback;
     }
 

@@ -46,8 +46,16 @@ public class RequestService {
 
         // Notify org admins (we notify the doc author here as a proxy for the org)
         UUID authorId = documentFacade.getAuthorId(req.getDocId());
+        
+        // ДОБАВЕНО: Изпращане на documentId и organizationId
+        UUID orgId = documentFacade.resolveOrgId(req.getDocId());
         events.publishEvent(new NotificationEvent(this, authorId, "FORK_REQUEST_CREATED",
-            Map.of("requestId", entity.getId(), "docId", req.getDocId())));
+            Map.of(
+                "documentId", req.getDocId(),
+                "organizationId", orgId,
+                "requestId", entity.getId(),
+                "message", "A new fork request was created."
+            )));
 
         return entity;
     }
@@ -72,11 +80,17 @@ public class RequestService {
 
         String eventType = newStatus == RequestStatus.APPROVED
             ? "FORK_REQUEST_APPROVED" : "FORK_REQUEST_REJECTED";
+            
+        // ДОБАВЕНО: Изпращане на documentId и organizationId
         events.publishEvent(new NotificationEvent(this, request.getRequesterId(), eventType,
-            Map.of("requestId", requestId)));
+            Map.of(
+                "documentId", request.getDocId(),
+                "organizationId", orgId,
+                "requestId", requestId,
+                "message", "Your fork request was actioned."
+            )));
     }
 
-    // ownership check (requesterId == callerId) is enforced after resolving the request entity
     @PreAuthorize("isAuthenticated()")
     public void cancelRequest(UUID requestId, UUID callerId) {
         ForkRequestEntity request = resolve(requestId);

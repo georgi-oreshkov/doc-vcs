@@ -1,82 +1,116 @@
-import { useEffect, useState } from 'react';
-import { getNotifications } from '../api/notificationsApi';
+import { useEffect, useState } from "react";
+import { useNavigate } from 'react-router-dom';
+import { FileSignature, UserPlus, FileText, FileCheck, AlertCircle, Check } from "lucide-react";
+import { getNotifications, markAsRead } from '../api/notificationsApi';
+import { Button, Spinner } from "@heroui/react";
 
 function timeAgo(iso) {
   if (!iso) return '';
   const diff = Date.now() - new Date(iso).getTime();
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'Just now';
   if (m < 60) return `${m}m ago`;
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
+  return new Date(iso).toLocaleDateString();
 }
+
+const getNotificationStyle = (type = '', payload = {}) => {
+  const t = String(type).toUpperCase();
+  const msg = String(payload?.message || '').toUpperCase();
+
+  if (t.includes('APPROV') || msg.includes('APPROV')) 
+    return { icon: <FileCheck className="text-lime-500" size={24} />, bg: "bg-zinc-900 border-zinc-800" };
+  if (t.includes('MEMBER') || msg.includes('ADDED')) 
+    return { icon: <UserPlus className="text-lime-500" size={24} />, bg: "bg-zinc-900 border-zinc-800" };
+  if (t.includes('REVIEW') || t.includes('VERSION')) 
+    return { icon: <FileSignature className="text-lime-500" size={24} />, bg: "bg-zinc-900 border-zinc-800" };
+  if (t.includes('ERROR') || t.includes('FAIL')) 
+    return { icon: <AlertCircle className="text-red-500" size={24} />, bg: "bg-red-500/10 border-red-500/20" };
+    
+  return { icon: <FileText className="text-zinc-400" size={24} />, bg: "bg-zinc-900 border-zinc-800" };
+};
+
+const parseNotification = (notif) => {
+  let payload = {};
+  try {
+    payload = typeof notif.payload === 'string' ? JSON.parse(notif.payload) : (notif.payload || {});
+  } catch (e) {
+    payload = { message: notif.payload };
+  }
+
+  const title = payload.documentTitle || payload.title || notif.type?.replace(/_/g, ' ') || 'Notification';
+  const desc = payload.message || payload.desc || '';
+  const style = getNotificationStyle(notif.type, payload);
+
+  return { title, desc, payload, style };
+};
 
 export default function NotificationsView() {
   const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-    getNotifications()
-      .then((data) => {
-        if (!mounted) return;
-        setNotifications(Array.isArray(data) ? data : []);
-      })
-      .catch((e) => {
-        console.error('fetch notifications', e);
-      })
-      .finally(() => mounted && setLoading(false));
-
-    return () => {
-      mounted = false;
-    };
+    getNotifications({})
+      .then(data => setNotifications(Array.isArray(data) ? data : []))
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, []);
+
+  const handleAction = async (notif) => {
+    const { payload } = parseNotification(notif);
+    if (!notif.readAt) {
+      markAsRead(notif.id).catch(console.error);
+      setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, readAt: new Date().toISOString() } : n));
+    }
+    
+    const orgId = payload.organizationId || payload.orgId || payload.organization_id;
+    const docId = payload.documentId || payload.docId || payload.document_id;
+
+    if (docId && orgId) {
+      navigate(`/organizations/${orgId}/documents/${docId}`);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    const unread = notifications.filter(n => !n.readAt);
+    await Promise.all(unread.map(n => markAsRead(n.id)));
+    setNotifications(prev => prev.map(n => ({ ...n, readAt: n.readAt ?? new Date().toISOString() })));
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-12 w-full flex-grow">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Notifications</h1>
-        <p className="text-zinc-400">View all your recent alerts and activity.</p>
+      <div className="flex justify-between items-center mb-10">
+        <div>
+          <h1 className="text-4xl font-black text-white tracking-tight mb-2">Notifications</h1>
+          <p className="text-zinc-500 text-sm">Track recent activity and document updates.</p>
+        </div>
+        <Button variant="flat" onPress={handleMarkAllRead} className="text-lime-500 bg-lime-500/10 hover:bg-lime-500/20 font-bold" startContent={<Check size={18} />}>
+          MARK ALL AS READ
+        </Button>
       </div>
 
-      <div className="bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden shadow-xl">
+      <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
         {loading ? (
-          <div className="p-12 text-center text-zinc-500">Loading…</div>
+          <div className="p-20 text-center"><Spinner color="success" /></div>
         ) : notifications.length === 0 ? (
-          <div className="p-12 text-center text-zinc-500">You have no new notifications.</div>
+          <div className="p-20 text-center text-zinc-600">You have no new notifications.</div>
         ) : (
           <div className="flex flex-col">
             {notifications.map((notif) => {
-              let payload = null;
-              try { payload = notif.payload ? JSON.parse(notif.payload) : null; } catch (e) { payload = null; }
-              const title = payload?.title || notif.type || 'Notification';
-              const desc = payload?.message || payload?.desc || (typeof notif.payload === 'string' ? notif.payload : '');
-              const isRead = Boolean(notif.readAt);
-
+              const { title, desc, style } = parseNotification(notif);
               return (
-                <div
-                  key={notif.id}
-                  className={`p-6 flex items-start gap-4 transition-colors border-b border-zinc-800/50 last:border-0 hover:bg-zinc-900 ${!isRead ? 'bg-zinc-900/30' : 'bg-transparent'}`}
-                >
-                  <div className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0 mt-1">
-                    <span className="text-xs text-zinc-400">🔔</span>
+                <div key={notif.id} onClick={() => handleAction(notif)} className={`p-6 flex items-start gap-5 transition-all border-b border-zinc-800/50 last:border-0 hover:bg-zinc-900 cursor-pointer ${!notif.readAt ? 'bg-lime-500/[0.02]' : ''}`}>
+                  <div className={`w-12 h-12 rounded-xl border flex items-center justify-center shrink-0 mt-1 shadow-sm ${style.bg}`}>{style.icon}</div>
+                  <div className="flex flex-col flex-grow min-w-0">
+                    <div className="flex justify-between items-start gap-4">
+                      <p className={`text-lg leading-tight truncate ${!notif.readAt ? 'text-white font-bold' : 'text-zinc-400 font-medium'}`}>{title}</p>
+                      <span className="text-[12px] text-zinc-600 font-bold uppercase whitespace-nowrap mt-1">{timeAgo(notif.createdAt)}</span>
+                    </div>
+                    {desc && <p className="text-zinc-500 text-sm mt-1 leading-relaxed">{desc}</p>}
                   </div>
-
-                  <div className="flex flex-col gap-1 flex-grow">
-                    <p className={`text-base ${isRead ? 'text-zinc-400' : 'text-zinc-200'}`}>
-                      <span className={`font-semibold ${!isRead ? 'text-white' : 'text-zinc-300'}`}>{title}</span>
-                    </p>
-                    <p className="text-zinc-400 text-sm">{desc}</p>
-                    <span className="text-xs text-zinc-500 mt-2 font-medium">{timeAgo(notif.createdAt)}</span>
-                  </div>
-
-                  {!isRead && (
-                    <div className="w-3 h-3 rounded-full bg-lime-500 shrink-0 mt-2"></div>
-                  )}
+                  {!notif.readAt && <div className="w-2.5 h-2.5 rounded-full bg-lime-500 shadow-[0_0_10px_rgba(132,204,22,0.5)] shrink-0 mt-3"></div>}
                 </div>
               );
             })}
