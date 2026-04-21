@@ -23,6 +23,5 @@ public class VersionRow {
     private String status;
     private String storageType;
     private String checksum;
-    private String s3Key;
 }
 

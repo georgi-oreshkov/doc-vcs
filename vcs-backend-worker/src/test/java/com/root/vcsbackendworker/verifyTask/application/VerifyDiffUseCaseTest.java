@@ -280,7 +280,6 @@ class VerifyDiffUseCaseTest {
                 .versionNumber(PREV_VERSION)
                 .storageType("SNAPSHOT")
                 .checksum(PREV_CHECKSUM)
-                .s3Key(PREV_PERMANENT_KEY)
                 .build();
         when(versionQueryGateway.findByDocIdAndVersionNumber(DOC_ID, PREV_VERSION))
                 .thenReturn(Optional.of(prevRow));
@@ -292,7 +291,6 @@ class VerifyDiffUseCaseTest {
                 .versionNumber(PREV_VERSION)
                 .storageType("DIFF")
                 .checksum(PREV_CHECKSUM)
-                .s3Key(S3KeyTemplates.permanentVersion(DOC_ID, PREV_VERSION))
                 .build();
         when(versionQueryGateway.findByDocIdAndVersionNumber(DOC_ID, PREV_VERSION))
                 .thenReturn(Optional.of(prevRow));

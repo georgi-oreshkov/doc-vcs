@@ -43,6 +43,7 @@ class ReconstructDocumentUseCaseTest {
 
     // Derived S3 keys via templates
     static final String TEMP_KEY = S3KeyTemplates.tempReconstruction(DOC_ID, TARGET_VERSION);
+    static final String TARGET_SNAPSHOT_KEY = S3KeyTemplates.permanentVersion(DOC_ID, TARGET_VERSION);
 
     ReconstructTaskMessage validTask;
 
@@ -80,7 +81,7 @@ class ReconstructDocumentUseCaseTest {
         byte[] bytes = "snapshot content".getBytes();
 
         when(versionQueryGateway.findById(VERSION_ID)).thenReturn(Optional.of(snapshot));
-        when(s3.fetchBytes(snapshot.getS3Key())).thenReturn(bytes);
+        when(s3.fetchBytes(TARGET_SNAPSHOT_KEY)).thenReturn(bytes);
         when(s3.generatePresignedDownloadUrl(TEMP_KEY)).thenReturn(PRESIGNED_URL);
 
         useCase.handle(validTask);
@@ -96,7 +97,7 @@ class ReconstructDocumentUseCaseTest {
         byte[] bytes = "snapshot content".getBytes();
 
         when(versionQueryGateway.findById(VERSION_ID)).thenReturn(Optional.of(snapshot));
-        when(s3.fetchBytes(snapshot.getS3Key())).thenReturn(bytes);
+        when(s3.fetchBytes(TARGET_SNAPSHOT_KEY)).thenReturn(bytes);
         when(s3.generatePresignedDownloadUrl(TEMP_KEY)).thenReturn(PRESIGNED_URL);
 
         useCase.handle(validTask);
@@ -109,7 +110,7 @@ class ReconstructDocumentUseCaseTest {
         VersionRow snapshot = snapshotRow(VERSION_ID, TARGET_VERSION);
 
         when(versionQueryGateway.findById(VERSION_ID)).thenReturn(Optional.of(snapshot));
-        when(s3.fetchBytes(snapshot.getS3Key())).thenThrow(NoSuchKeyException.builder().build());
+        when(s3.fetchBytes(TARGET_SNAPSHOT_KEY)).thenThrow(NoSuchKeyException.builder().build());
 
         useCase.handle(validTask);
 
@@ -122,7 +123,7 @@ class ReconstructDocumentUseCaseTest {
         VersionRow snapshot = snapshotRow(VERSION_ID, TARGET_VERSION);
 
         when(versionQueryGateway.findById(VERSION_ID)).thenReturn(Optional.of(snapshot));
-        when(s3.fetchBytes(snapshot.getS3Key())).thenThrow(new RuntimeException("connection reset"));
+        when(s3.fetchBytes(TARGET_SNAPSHOT_KEY)).thenThrow(new RuntimeException("connection reset"));
 
         useCase.handle(validTask);
 
@@ -171,7 +172,7 @@ class ReconstructDocumentUseCaseTest {
         byte[] bytes = "content".getBytes();
 
         when(versionQueryGateway.findById(VERSION_ID)).thenReturn(Optional.of(snapshot));
-        when(s3.fetchBytes(snapshot.getS3Key())).thenReturn(bytes);
+        when(s3.fetchBytes(TARGET_SNAPSHOT_KEY)).thenReturn(bytes);
         doThrow(new RuntimeException("upload failed")).when(s3).uploadBytes(any(), any());
 
         useCase.handle(validTask);
@@ -186,7 +187,7 @@ class ReconstructDocumentUseCaseTest {
         byte[] bytes = "content".getBytes();
 
         when(versionQueryGateway.findById(VERSION_ID)).thenReturn(Optional.of(snapshot));
-        when(s3.fetchBytes(snapshot.getS3Key())).thenReturn(bytes);
+        when(s3.fetchBytes(TARGET_SNAPSHOT_KEY)).thenReturn(bytes);
         when(s3.generatePresignedDownloadUrl(any())).thenThrow(new RuntimeException("presign failed"));
 
         useCase.handle(validTask);
@@ -214,7 +215,6 @@ class ReconstructDocumentUseCaseTest {
                 .id(id).docId(DOC_ID)
                 .versionNumber(versionNumber)
                 .storageType("SNAPSHOT")
-                .s3Key(S3KeyTemplates.permanentVersion(DOC_ID, versionNumber))
                 .build();
     }
 
@@ -223,7 +223,6 @@ class ReconstructDocumentUseCaseTest {
                 .id(id).docId(DOC_ID)
                 .versionNumber(versionNumber)
                 .storageType("DIFF")
-                .s3Key(S3KeyTemplates.permanentVersion(DOC_ID, versionNumber))
                 .build();
     }
 }

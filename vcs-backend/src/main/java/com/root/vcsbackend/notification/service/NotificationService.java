@@ -5,7 +5,10 @@ import com.root.vcsbackend.notification.domain.NotificationEntity;
 import com.root.vcsbackend.notification.api.NotificationEvent;
 import com.root.vcsbackend.notification.persistence.NotificationRepository;
 import com.root.vcsbackend.shared.exception.AppException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -18,10 +21,13 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @Transactional
 @RequiredArgsConstructor
 public class NotificationService {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final NotificationRepository notificationRepository;
 
@@ -37,8 +43,23 @@ public class NotificationService {
         notificationRepository.save(NotificationEntity.builder()
             .recipientId(event.getRecipientId())
             .type(event.getType())
-            .payload(event.getPayload() != null ? event.getPayload().toString() : null)
+            .payload(serializePayload(event.getPayload()))
             .build());
+    }
+
+    private String serializePayload(Object payload) {
+        if (payload == null) {
+            return null;
+        }
+        if (payload instanceof String s) {
+            return s;
+        }
+        try {
+            return OBJECT_MAPPER.writeValueAsString(payload);
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize notification payload: {}", payload, e);
+            return null;
+        }
     }
 
     @Transactional(readOnly = true)

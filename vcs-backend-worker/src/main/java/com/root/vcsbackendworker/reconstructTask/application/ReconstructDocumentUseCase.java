@@ -42,15 +42,16 @@ public class ReconstructDocumentUseCase {
         // 2. If the target itself is a snapshot, fetch it directly — no diff chain needed
         byte[] resultBytes;
         if ("SNAPSHOT".equals(targetRow.getStorageType())) {
-            log.debug("Target version is a snapshot, fetching directly: key={}", targetRow.getS3Key());
+            String snapshotKey = S3KeyTemplates.permanentVersion(task.getDocId(), targetRow.getVersionNumber());
+            log.debug("Target version is a snapshot, fetching directly: key={}", snapshotKey);
             try {
-                resultBytes = s3.fetchBytes(targetRow.getS3Key());
+                resultBytes = s3.fetchBytes(snapshotKey);
             } catch (NoSuchKeyException e) {
-                log.error("Snapshot not found in S3: key={}", targetRow.getS3Key(), e);
+                log.error("Snapshot not found in S3: key={}", snapshotKey, e);
                 recordFailure(task, FailureReason.SOURCE_NOT_FOUND);
                 return;
             } catch (Exception e) {
-                log.error("Failed to fetch snapshot from S3: key={}", targetRow.getS3Key(), e);
+                log.error("Failed to fetch snapshot from S3: key={}", snapshotKey, e);
                 recordFailure(task, FailureReason.STORAGE_ERROR);
                 return;
             }

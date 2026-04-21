@@ -124,6 +124,7 @@ services:
       WORKER_RESULT_CHANNEL: ${WORKER_RESULT_CHANNEL:-vcs.diff.results}
       # ── S3 / MinIO ────────────────────────────────────────────────────────
       S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: http://localhost:19000
       S3_BUCKET: ${S3_BUCKET:-vcs-documents}
       S3_REGION: ${S3_REGION:-eu-central-1}
       S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}

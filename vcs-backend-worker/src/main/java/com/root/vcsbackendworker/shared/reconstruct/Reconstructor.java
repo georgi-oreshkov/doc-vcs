@@ -5,6 +5,7 @@ import com.root.vcsbackendworker.shared.db.VersionRow;
 import com.root.vcsbackendworker.shared.diff.DiffApplicationException;
 import com.root.vcsbackendworker.shared.diff.DiffApplicator;
 import com.root.vcsbackendworker.shared.s3.S3DocumentStorage;
+import com.root.vcsbackendworker.shared.s3.S3KeyTemplates;
 import com.root.vcsbackendworker.shared.verify.ChecksumVerifier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,14 +47,15 @@ public class Reconstructor {
 
         // 4. Fetch the snapshot bytes as the starting point
         byte[] current;
+        String snapshotKey = S3KeyTemplates.permanentVersion(docId, snapshot.getVersionNumber());
         try {
-            current = s3.fetchBytes(snapshot.getS3Key());
+            current = s3.fetchBytes(snapshotKey);
         } catch (NoSuchKeyException e) {
-            log.error("Snapshot not found in S3: key={}", snapshot.getS3Key(), e);
+            log.error("Snapshot not found in S3: key={}", snapshotKey, e);
             throw new ReconstructionException("Snapshot no found in s3",e);
 
         } catch (Exception e) {
-            log.error("Failed to fetch snapshot from S3: key={}", snapshot.getS3Key(), e);
+            log.error("Failed to fetch snapshot from S3: key={}", snapshotKey, e);
             throw new ReconstructionException("Failed to fetch snapshot from S3",e);
         }
 
@@ -66,13 +68,14 @@ public class Reconstructor {
 
         for (VersionRow diff : diffs) {
             byte[] diffBytes;
+            String diffKey = S3KeyTemplates.permanentVersion(docId, diff.getVersionNumber());
             try {
-                diffBytes = s3.fetchBytes(diff.getS3Key());
+                diffBytes = s3.fetchBytes(diffKey);
             } catch (NoSuchKeyException e) {
-                log.error("Diff not found in S3: key={}, versionNumber={}", diff.getS3Key(), diff.getVersionNumber(), e);
+                log.error("Diff not found in S3: key={}, versionNumber={}", diffKey, diff.getVersionNumber(), e);
                 throw new ReconstructionException("Diff not found in S3",e);
             } catch (Exception e) {
-                log.error("Failed to fetch diff from S3: key={}", diff.getS3Key(), e);
+                log.error("Failed to fetch diff from S3: key={}", diffKey, e);
                 throw new ReconstructionException("Failed to fetch diff from S3",e);
             }
 

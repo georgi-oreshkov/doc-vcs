@@ -28,17 +28,16 @@ public class VersionQueryGateway {
      * Finds the last snapshot version before (or at) the given target version number
      * for a specific document.
      * <p>
-     * Requires the {@code storage_type} column on the {@code versions} table
-     * (added via Flyway migration in vcs-backend).
+      * Uses {@code storage_type} on {@code versions} to find the nearest snapshot.
+      * S3 keys are not stored in DB anymore (derived via {@code S3KeyTemplates}).
      *
      * @param docId               document ID
      * @param targetVersionNumber the version number to reconstruct up to
      * @return the closest preceding snapshot version, or empty if none exists
      */
-    //subject to change
     public Optional<VersionRow> findLastSnapshotBefore(UUID docId, int targetVersionNumber) {
         return jdbcClient.sql("""
-                SELECT id, doc_id, version_number, status, storage_type, checksum, s3_key
+                SELECT id, doc_id, version_number, status, storage_type, checksum
                 FROM vcs_core.versions
                 WHERE doc_id = :docId
                   AND version_number <= :targetVersionNumber
@@ -63,7 +62,7 @@ public class VersionQueryGateway {
      */
     public List<VersionRow> findDiffVersionsBetween(UUID docId, int afterVersionNumber, int upToVersionNumber) {
         return jdbcClient.sql("""
-                SELECT id, doc_id, version_number, status, storage_type, checksum, s3_key
+                SELECT id, doc_id, version_number, status, storage_type, checksum
                 FROM vcs_core.versions
                 WHERE doc_id = :docId
                   AND version_number > :afterVersionNumber
@@ -84,7 +83,7 @@ public class VersionQueryGateway {
 
     public Optional<VersionRow> findById(UUID versionId) {
         return jdbcClient.sql("""
-                SELECT id, doc_id, version_number, status, storage_type, checksum, s3_key
+                SELECT id, doc_id, version_number, status, storage_type, checksum
                 FROM vcs_core.versions
                 WHERE id = :versionId
                 """)
@@ -98,7 +97,7 @@ public class VersionQueryGateway {
      */
     public Optional<VersionRow> findByDocIdAndVersionNumber(UUID docId, Integer versionNumber) {
         return jdbcClient.sql("""
-                SELECT id, doc_id, version_number, status, storage_type, checksum, s3_key
+                SELECT id, doc_id, version_number, status, storage_type, checksum
                 FROM vcs_core.versions
                 WHERE doc_id = :docId AND version_number = :versionNumber
                 """)

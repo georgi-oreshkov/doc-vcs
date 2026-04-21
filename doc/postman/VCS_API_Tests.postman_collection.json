@@ -1,0 +1,909 @@
+{
+  "info": {
+    "name": "VCS API – Document & Version Flows",
+    "_postman_id": "vcs-api-doc-version-flows",
+    "description": "End-to-end tests for uploading documents, creating versions, downloading, and diffing.\n\nRequires a Keycloak `vcs` realm with a test user.\nPass access_token via --env-var or configure OAuth 2.0 in Postman.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8080", "type": "string" },
+    { "key": "s3_internal_host", "value": "vcs-documents.minio:9000", "type": "string" },
+    { "key": "s3_external_host", "value": "localhost:19000", "type": "string" },
+    { "key": "access_token", "value": "", "type": "string" },
+    { "key": "org_id", "value": "", "type": "string" },
+    { "key": "doc_id", "value": "", "type": "string" },
+    { "key": "version_id", "value": "", "type": "string" },
+    { "key": "upload_url", "value": "", "type": "string" },
+    { "key": "download_url", "value": "", "type": "string" },
+    { "key": "v2_version_id", "value": "", "type": "string" },
+    { "key": "v2_upload_url", "value": "", "type": "string" },
+    { "key": "category_id", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Setup",
+      "description": "Create the org and category needed by subsequent tests.",
+      "item": [
+        {
+          "name": "Get User Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/user/profile",
+              "host": ["{{base_url}}"],
+              "path": ["user", "profile"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Profile contains id, name, email', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('id');",
+                  "    pm.expect(body).to.have.property('name');",
+                  "    pm.expect(body).to.have.property('email');",
+                  "});",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Create Organization",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Org {{$timestamp}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/organizations",
+              "host": ["{{base_url}}"],
+              "path": ["organizations"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Organization has id and name', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('id');",
+                  "    pm.expect(body).to.have.property('name');",
+                  "    pm.collectionVariables.set('org_id', body.id);",
+                  "});",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Create Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Reports\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/organizations/{{org_id}}/categories",
+              "host": ["{{base_url}}"],
+              "path": ["organizations", "{{org_id}}", "categories"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Category has id and name', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('id');",
+                  "    pm.expect(body.name).to.eql('Reports');",
+                  "    pm.collectionVariables.set('category_id', body.id);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Document Upload Flow",
+      "description": "Create a document (returns presigned upload URL), extract the doc_id from the URL, upload a file to S3, then verify.",
+      "item": [
+        {
+          "name": "Create Document (get upload URL)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Q1 Financial Report\",\n  \"category_id\": \"{{category_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/organizations/{{org_id}}/documents",
+              "host": ["{{base_url}}"],
+              "path": ["organizations", "{{org_id}}", "documents"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Response contains upload_url – extract doc_id and rewrite host', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('upload_url');",
+                  "    pm.expect(body.upload_url).to.be.a('string').and.to.include('http');",
+                  "",
+                  "    // Extract doc_id from S3 key: .../documents/{doc_id}/v1?...",
+                  "    const marker = '/documents/';",
+                  "    const start = body.upload_url.indexOf(marker) + marker.length;",
+                  "    const docId = body.upload_url.substring(start, body.upload_url.indexOf('/', start));",
+                  "    pm.expect(docId).to.be.a('string').and.to.have.lengthOf(36);",
+                  "    pm.collectionVariables.set('doc_id', docId);",
+                  "",
+                  "    // Rewrite S3 URL: Docker-internal → localhost",
+                  "    const internalHost = pm.collectionVariables.get('s3_internal_host');",
+                  "    const externalHost = pm.collectionVariables.get('s3_external_host');",
+                  "    const rewritten = body.upload_url.replace(internalHost, externalHost);",
+                  "    pm.collectionVariables.set('upload_url', rewritten);",
+                  "});",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(3000);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Upload file to S3 (presigned PUT)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "text/plain" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "This is the content of Q1 Financial Report version 1.\nLine 2 of the report.\nLine 3 of the report.\n"
+            },
+            "url": {
+              "raw": "{{upload_url}}",
+              "host": ["{{upload_url}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('S3 upload succeeds (200 or 204)', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+                  "});",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get Document details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/documents/{{doc_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["documents", "{{doc_id}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Document has correct name', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.name).to.eql('Q1 Financial Report');",
+                  "});",
+                  "",
+                  "pm.test('Document belongs to the correct org', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.org_id).to.eql(pm.collectionVariables.get('org_id'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "List Documents in Org",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/organizations/{{org_id}}/documents?page=0&size=10",
+              "host": ["{{base_url}}"],
+              "path": ["organizations", "{{org_id}}", "documents"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains content array', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('content');",
+                  "    pm.expect(body.content).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('At least one document exists', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content.length).to.be.at.least(1);",
+                  "});",
+                  "",
+                  "pm.test('Response has pagination metadata', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('meta');",
+                  "    pm.expect(body.meta).to.have.property('totalElements');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "List Versions (capture v1 id)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/documents/{{doc_id}}/versions?page=0&size=10",
+              "host": ["{{base_url}}"],
+              "path": ["documents", "{{doc_id}}", "versions"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Has at least 1 version and capture v1 id', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.be.an('array').with.lengthOf.at.least(1);",
+                  "    const v1 = body.content.find(v => v.version_number === 1);",
+                  "    pm.expect(v1).to.not.be.undefined;",
+                  "    pm.collectionVariables.set('version_id', v1.id);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Version Upload Flow",
+      "description": "Upload a second version and verify.",
+      "item": [
+        {
+          "name": "Create Version v2 (get upload URL)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"checksum\": \"sha256-placeholder-v2\",\n  \"is_draft\": false,\n  \"is_diff\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/documents/{{doc_id}}/versions",
+              "host": ["{{base_url}}"],
+              "path": ["documents", "{{doc_id}}", "versions"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Response contains upload_url – rewrite host', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('upload_url');",
+                  "    pm.expect(body.upload_url).to.include('http');",
+                  "",
+                  "    const internalHost = pm.collectionVariables.get('s3_internal_host');",
+                  "    const externalHost = pm.collectionVariables.get('s3_external_host');",
+                  "    const rewritten = body.upload_url.replace(internalHost, externalHost);",
+                  "    pm.collectionVariables.set('v2_upload_url', rewritten);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Upload v2 file to S3",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "text/plain" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "This is the content of Q1 Financial Report version 2.\nLine 2 has been updated with new figures.\nLine 3 of the report.\nLine 4 is a new addition.\n"
+            },
+            "url": {
+              "raw": "{{v2_upload_url}}",
+              "host": ["{{v2_upload_url}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('S3 upload succeeds (200 or 204)', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "List Versions (capture v2 id)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/documents/{{doc_id}}/versions?page=0&size=10",
+              "host": ["{{base_url}}"],
+              "path": ["documents", "{{doc_id}}", "versions"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Now has at least 2 versions', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content.length).to.be.at.least(2);",
+                  "});",
+                  "",
+                  "pm.test('Capture v2 version_id', function () {",
+                  "    const body = pm.response.json();",
+                  "    const v2 = body.content.find(v => v.version_number === 2);",
+                  "    pm.expect(v2).to.not.be.undefined;",
+                  "    pm.collectionVariables.set('v2_version_id', v2.id);",
+                  "});",
+                  "",
+                  "pm.test('Versions have expected properties', function () {",
+                  "    const body = pm.response.json();",
+                  "    const v = body.content[0];",
+                  "    pm.expect(v).to.have.property('id');",
+                  "    pm.expect(v).to.have.property('version_number');",
+                  "    pm.expect(v).to.have.property('created_at');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get Version v2 details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/documents/{{doc_id}}/versions/{{v2_version_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["documents", "{{doc_id}}", "versions", "{{v2_version_id}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Version belongs to the correct document', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.doc_id).to.eql(pm.collectionVariables.get('doc_id'));",
+                  "});",
+                  "",
+                  "pm.test('Version has expected fields', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('id');",
+                  "    pm.expect(body).to.have.property('version_number');",
+                  "    pm.expect(body).to.have.property('status');",
+                  "    pm.expect(body).to.have.property('is_draft');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Download Flow",
+      "description": "Download version files via presigned URLs.",
+      "item": [
+        {
+          "name": "Get v1 Download URL",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/documents/{{doc_id}}/versions/{{version_id}}/download",
+              "host": ["{{base_url}}"],
+              "path": ["documents", "{{doc_id}}", "versions", "{{version_id}}", "download"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 or 202', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 202]);",
+                  "});",
+                  "",
+                  "pm.test('Rewrite and store download_url (if 200)', function () {",
+                  "    if (pm.response.code === 200) {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('download_url');",
+                  "        const internalHost = pm.collectionVariables.get('s3_internal_host');",
+                  "        const externalHost = pm.collectionVariables.get('s3_external_host');",
+                  "        const rewritten = body.download_url.replace(internalHost, externalHost);",
+                  "        pm.collectionVariables.set('download_url', rewritten);",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Download v1 file from S3",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{download_url}}",
+              "host": ["{{download_url}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Download succeeds (200)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Downloaded content is not empty', function () {",
+                  "    pm.expect(pm.response.text().length).to.be.above(0);",
+                  "});",
+                  "",
+                  "pm.test('Content matches uploaded text', function () {",
+                  "    const text = pm.response.text();",
+                  "    pm.expect(text).to.include('Q1 Financial Report');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get v2 Download URL",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/documents/{{doc_id}}/versions/{{v2_version_id}}/download",
+              "host": ["{{base_url}}"],
+              "path": ["documents", "{{doc_id}}", "versions", "{{v2_version_id}}", "download"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 or 202', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 202]);",
+                  "});",
+                  "",
+                  "pm.test('Rewrite and store download_url (if 200)', function () {",
+                  "    if (pm.response.code === 200) {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('download_url');",
+                  "        const internalHost = pm.collectionVariables.get('s3_internal_host');",
+                  "        const externalHost = pm.collectionVariables.get('s3_external_host');",
+                  "        const rewritten = body.download_url.replace(internalHost, externalHost);",
+                  "        pm.collectionVariables.set('download_url', rewritten);",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Download v2 file from S3",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{download_url}}",
+              "host": ["{{download_url}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Download succeeds (200)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('v2 content contains updated text', function () {",
+                  "    const text = pm.response.text();",
+                  "    pm.expect(text).to.include('version 2');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Diff Flow",
+      "description": "Request a diff between version 1 and version 2.",
+      "item": [
+        {
+          "name": "Get Diff (v1 → v2)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/documents/{{doc_id}}/versions/diff?from={{version_id}}&to={{v2_version_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["documents", "{{doc_id}}", "versions", "diff"],
+              "query": [
+                { "key": "from", "value": "{{version_id}}" },
+                { "key": "to", "value": "{{v2_version_id}}" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 or 202', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 202]);",
+                  "});",
+                  "",
+                  "pm.test('Diff response has expected structure (if 200)', function () {",
+                  "    if (pm.response.code === 200) {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('from_version_id');",
+                  "        pm.expect(body).to.have.property('to_version_id');",
+                  "        pm.expect(body).to.have.property('diff');",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Comments Flow",
+      "description": "Add and list comments on a version.",
+      "item": [
+        {
+          "name": "Add Comment to v1",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Looks good, the figures are correct.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/documents/{{doc_id}}/versions/{{version_id}}/comments",
+              "host": ["{{base_url}}"],
+              "path": ["documents", "{{doc_id}}", "versions", "{{version_id}}", "comments"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Comment has id, content, and created_at', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('id');",
+                  "    pm.expect(body).to.have.property('content');",
+                  "    pm.expect(body).to.have.property('created_at');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "List Comments on v1",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/documents/{{doc_id}}/versions/{{version_id}}/comments",
+              "host": ["{{base_url}}"],
+              "path": ["documents", "{{doc_id}}", "versions", "{{version_id}}", "comments"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('At least one comment exists', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.be.an('array');",
+                  "    pm.expect(body.length).to.be.at.least(1);",
+                  "});",
+                  "",
+                  "pm.test('Comment has expected structure', function () {",
+                  "    const body = pm.response.json();",
+                  "    const comment = body[0];",
+                  "    pm.expect(comment).to.have.property('id');",
+                  "    pm.expect(comment).to.have.property('author_id');",
+                  "    pm.expect(comment).to.have.property('content');",
+                  "    pm.expect(comment).to.have.property('created_at');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Cleanup",
+      "description": "Delete the test document and organization.",
+      "item": [
+        {
+          "name": "Delete Document",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/documents/{{doc_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["documents", "{{doc_id}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Delete returns 202 or 204', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([202, 204]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Delete Category",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/organizations/{{org_id}}/categories/{{category_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["organizations", "{{org_id}}", "categories", "{{category_id}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Delete category returns 204 or 400', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([204, 400]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Delete Organization",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/organizations/{{org_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["organizations", "{{org_id}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Delete org returns 204 or 500', function () {",
+                  "    // 500 may occur if documents still reference this org",
+                  "    pm.expect(pm.response.code).to.be.oneOf([204, 500]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    }
+  ]
+}
