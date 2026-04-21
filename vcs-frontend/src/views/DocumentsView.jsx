@@ -1,42 +1,63 @@
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useDisclosure, Button, Spinner } from "@heroui/react";
+import { useDisclosure, Button, Spinner, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/react";
 import { Plus, ArrowLeft } from 'lucide-react';
+import { useAuth } from 'react-oidc-context';
 import DocumentCard from '../components/DocumentCard';
 import DocumentsFilter, { useDocumentFilters } from '../components/DocumentsFilter';
 import NewDocumentModal from '../components/NewDocumentModal';
-import { useOrgDocuments, useMyDocuments, useCreateDocument } from '../hooks/useDocuments';
+import ManageReviewersModal from '../components/ManageReviewersModal';
+import { useOrgDocuments, useMyDocuments, useCreateDocument, useDeleteDocument } from '../hooks/useDocuments';
 import { useOrg } from '../context/OrgContext';
-import { useOrganization } from '../hooks/useOrganizations';
+import { useOrganization, useOrgUsers } from '../hooks/useOrganizations';
 import { displayStatus } from '../api/transforms';
 
 export default function DocumentsView({ myDocs }) {
   const navigate = useNavigate();
   const { orgId } = useParams();
   const { selectedOrg, activeRole } = useOrg();
+  const auth = useAuth();
+  const currentUserId = auth.user?.profile?.sub;
+
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
+  const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onOpenChange: onDeleteOpenChange } = useDisclosure();
+  const { isOpen: isReviewersOpen, onOpen: onReviewersOpen, onOpenChange: onReviewersOpenChange } = useDisclosure();
+
+  const [docToDelete, setDocToDelete] = useState(null);
+  const [docForReviewers, setDocForReviewers] = useState(null);
 
   const effectiveOrgId = orgId || selectedOrg?.id;
   const { data: orgData } = useOrganization(effectiveOrgId);
-  
+  const { data: orgUsersData = [] } = useOrgUsers(myDocs ? null : effectiveOrgId);
+  const orgUsers = Array.isArray(orgUsersData) ? orgUsersData : [];
+
   const { data: orgDocsData, isLoading: orgLoading } = useOrgDocuments(effectiveOrgId, {}, );
   const { data: myDocsData, isLoading: myLoading } = useMyDocuments();
   const createDoc = useCreateDocument();
+  const deleteDoc = useDeleteDocument();
 
   const rawDocs = myDocs ? (myDocsData || []) : (orgDocsData?.content || orgDocsData || []);
   const isLoading = myDocs ? myLoading : orgLoading;
 
-  const docs = rawDocs.map(doc => ({
-    id: doc.id,
-    title: doc.name,
-    author: doc.author_id,
-    status: displayStatus(doc.status),
-    version: doc.latest_version_id ? '' : 'v0',
-    date: doc.created_at || '',
-    userRelation: 'author',
-  }));
+  const docs = rawDocs.map(doc => {
+    const authorUser = orgUsers.find(u => u.user_id === doc.author_id);
+    return {
+      id: doc.id,
+      title: doc.name,
+      author: authorUser?.name || (doc.author_id ? doc.author_id.slice(0, 8) : ''),
+      authorId: doc.author_id,
+      status: displayStatus(doc.status),
+      version: doc.latest_version_id ? null : 'v0',
+      date: doc.created_at || '',
+      userRelation: activeRole?.toLowerCase() || 'reader',
+      canDelete: activeRole === 'ADMIN' || doc.author_id === currentUserId,
+      canManageReviewers: activeRole === 'ADMIN',
+      reviewerIds: doc.reviewer_ids || [],
+    };
+  });
 
   const filterProps = useDocumentFilters(docs);
-  const { filteredDocuments } = filterProps; 
+  const { filteredDocuments } = filterProps;
 
   const handleCreateDocument = (data, file, onClose) => {
     createDoc.mutate(
@@ -51,6 +72,27 @@ export default function DocumentsView({ myDocs }) {
         },
       }
     );
+  };
+
+  const handleDelete = (docId) => {
+    setDocToDelete(docId);
+    onDeleteOpen();
+  };
+
+  const confirmDelete = (onClose) => {
+    if (!docToDelete) return;
+    deleteDoc.mutate(docToDelete, {
+      onSuccess: () => {
+        setDocToDelete(null);
+        onClose();
+      },
+    });
+  };
+
+  const handleManageReviewers = (docId) => {
+    const doc = rawDocs.find(d => d.id === docId);
+    setDocForReviewers(doc || { id: docId });
+    onReviewersOpen();
   };
 
   return (
@@ -80,16 +122,21 @@ export default function DocumentsView({ myDocs }) {
         )}
       </div>
 
-      <DocumentsFilter {...filterProps} />
+      <DocumentsFilter {...filterProps} orgUsers={orgUsers} />
 
       {isLoading ? (
         <div className="flex justify-center py-20"><Spinner color="primary" size="lg" /></div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {filteredDocuments.map(doc => (
-            <DocumentCard 
-              key={doc.id} doc={doc} 
-              onSelect={() => navigate(`/documents/${doc.id}`)} 
+            <DocumentCard
+              key={doc.id}
+              doc={doc}
+              onSelect={() => navigate(`/documents/${doc.id}`)}
+              canDelete={doc.canDelete}
+              canManageReviewers={doc.canManageReviewers}
+              onDelete={handleDelete}
+              onManageReviewers={handleManageReviewers}
             />
           ))}
           
@@ -98,11 +145,54 @@ export default function DocumentsView({ myDocs }) {
           )}
         </div>
       )}
+
       <NewDocumentModal 
         isOpen={isOpen} 
         onOpenChange={onOpenChange} 
         onSave={handleCreateDocument}
         isSaving={createDoc.isPending}
+      />
+
+      {/* Delete confirmation modal */}
+      <Modal
+        isOpen={isDeleteOpen}
+        onOpenChange={onDeleteOpenChange}
+        classNames={{
+          base: "bg-zinc-950 border border-zinc-800",
+          closeButton: "hover:bg-white/5 active:bg-white/10 text-zinc-400",
+        }}
+      >
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="text-white font-bold text-xl">Delete Document</ModalHeader>
+              <ModalBody>
+                <p className="text-zinc-300">Are you sure you want to delete this document? This action cannot be undone.</p>
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="light" onPress={onClose} className="text-zinc-400">
+                  Cancel
+                </Button>
+                <Button
+                  color="danger"
+                  onPress={() => confirmDelete(onClose)}
+                  isLoading={deleteDoc.isPending}
+                >
+                  Delete
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      {/* Manage reviewers modal */}
+      <ManageReviewersModal
+        isOpen={isReviewersOpen}
+        onOpenChange={onReviewersOpenChange}
+        docId={docForReviewers?.id}
+        orgUsers={orgUsers}
+        currentReviewerIds={docForReviewers?.reviewer_ids || []}
       />
     </div>
   );

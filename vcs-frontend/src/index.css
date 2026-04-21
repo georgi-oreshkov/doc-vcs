@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
+html, body {
+  background-color: #000;
+}
+
 @layer utilities {
   .animate-float {
     animation: float-fast 4s ease-in-out infinite;

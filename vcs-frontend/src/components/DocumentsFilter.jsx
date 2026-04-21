@@ -13,7 +13,8 @@ export function useDocumentFilters(docs) {
             const authorFilterArray = Array.from(selectedAuthor);
             const statusFilterArray = Array.from(selectedStatus);
 
-            const matchesAuthor = authorFilterArray.length === 0 || authorFilterArray.includes(doc.author);
+            // Compare by authorId (UUID) when a filter is applied
+            const matchesAuthor = authorFilterArray.length === 0 || authorFilterArray.includes(doc.authorId);
             const matchesStatus = statusFilterArray.length === 0 || statusFilterArray.includes(doc.status);
             const matchesSearch = doc.title.toLowerCase().includes(searchQuery.toLowerCase());
 
@@ -36,7 +37,8 @@ export default function DocumentsFilter({
     selectedAuthor,
     setSelectedAuthor,
     selectedStatus,
-    setSelectedStatus
+    setSelectedStatus,
+    orgUsers = [],
 }) {
     return (
         <div className="flex flex-col lg:flex-row gap-4 mb-8 bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/80">
@@ -51,19 +53,21 @@ export default function DocumentsFilter({
             />
 
             <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
-                <Select
-                    isClearable
-                    variant="bordered"
-                    className="w-full sm:w-1/2 lg:w-48 xl:w-64"
-                    placeholder="Filter by Author"
-                    startContent={<User size={18} className="text-zinc-500" />}
-                    selectedKeys={selectedAuthor}
-                    onSelectionChange={setSelectedAuthor}
-                >
-                    <SelectItem key="You">You</SelectItem>
-                    <SelectItem key="Alice Smith">Alice Smith</SelectItem>
-                    <SelectItem key="Bob Jones">Bob Jones</SelectItem>
-                </Select>
+                {orgUsers.length > 0 && (
+                    <Select
+                        isClearable
+                        variant="bordered"
+                        className="w-full sm:w-1/2 lg:w-48 xl:w-64"
+                        placeholder="Filter by Author"
+                        startContent={<User size={18} className="text-zinc-500" />}
+                        selectedKeys={selectedAuthor}
+                        onSelectionChange={setSelectedAuthor}
+                    >
+                        {orgUsers.map((u) => (
+                            <SelectItem key={u.user_id}>{u.name || u.email || u.user_id}</SelectItem>
+                        ))}
+                    </Select>
+                )}
 
                 <Select
                     isClearable
@@ -77,6 +81,7 @@ export default function DocumentsFilter({
                     <SelectItem key="Approved">Approved</SelectItem>
                     <SelectItem key="In Review">In Review</SelectItem>
                     <SelectItem key="Draft">Draft</SelectItem>
+                    <SelectItem key="Rejected">Rejected</SelectItem>
                 </Select>
             </div>
             

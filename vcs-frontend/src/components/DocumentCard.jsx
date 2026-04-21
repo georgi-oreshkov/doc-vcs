@@ -1,7 +1,14 @@
-import { Card, CardBody, Chip, Button, Avatar } from "@heroui/react";
-import { FileText, Clock, MoreVertical, CheckCircle2, AlertCircle, FileEdit } from 'lucide-react';
+import { Card, CardBody, Chip, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Button } from "@heroui/react";
+import { FileText, Clock, MoreVertical, CheckCircle2, AlertCircle, FileEdit, Trash2, UserCheck } from 'lucide-react';
 
-export default function DocumentCard({ doc, onSelect }) {
+export default function DocumentCard({
+  doc,
+  onSelect,
+  canDelete = false,
+  canManageReviewers = false,
+  onDelete,
+  onManageReviewers,
+}) {
   const getStatusConfig = (status) => {
     switch (status) {
       case 'Approved': return { color: 'success', icon: <CheckCircle2 size={14} /> };
@@ -14,6 +21,7 @@ export default function DocumentCard({ doc, onSelect }) {
 
   const statusConfig = getStatusConfig(doc.status);
   const showStatus = ['author', 'reviewer', 'admin'].includes(doc.userRelation);
+  const hasActions = canDelete || canManageReviewers;
 
   return (
     <Card isPressable onPress={onSelect} className="bg-zinc-900 border border-zinc-800 hover:border-lime-500/40 w-full">
@@ -25,17 +33,17 @@ export default function DocumentCard({ doc, onSelect }) {
           <div className="flex flex-col text-left">
             <h4 className="text-white font-semibold text-base mb-1">{doc.title}</h4>
             <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-400">
-              <span className="flex items-center gap-1.5">
-                <Avatar name={doc.author} size="sm" className="w-4 h-4 text-[8px]" /> {doc.author}
-              </span>
+              <span>{doc.author}</span>
               <span className="flex items-center gap-1"><Clock size={12} /> {doc.date}</span>
-              <Chip size="sm" variant="bordered" className="border-zinc-700 text-zinc-400 font-mono h-5 text-[10px]">
-                {doc.version}
-              </Chip>
+              {doc.version && (
+                <Chip size="sm" variant="bordered" className="border-zinc-700 text-zinc-400 font-mono h-5 text-[10px]">
+                  {doc.version}
+                </Chip>
+              )}
             </div>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-4">
           {showStatus ? (
             <Chip color={statusConfig.color} variant="flat" startContent={statusConfig.icon} size="sm">
@@ -44,19 +52,43 @@ export default function DocumentCard({ doc, onSelect }) {
           ) : (
             <span className="text-xs text-zinc-600 italic">View Only</span>
           )}
-          <Button 
-            as="div" 
-            role="button"
-            isIconOnly 
-            variant="light" 
-            className="text-zinc-500 min-w-min w-8 h-8 cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation(); 
-              console.log("Document options for: ", doc.id);
-            }}
-          >
-            <MoreVertical size={18} />
-          </Button>
+
+          {hasActions ? (
+            <Dropdown classNames={{ content: "bg-zinc-900 border border-zinc-800" }}>
+              <DropdownTrigger>
+                <Button
+                  isIconOnly
+                  variant="light"
+                  size="sm"
+                  className="text-zinc-500"
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label="Document options"
+                >
+                  <MoreVertical size={18} />
+                </Button>
+              </DropdownTrigger>
+              <DropdownMenu
+                aria-label="Document actions"
+                onAction={(key) => {
+                  if (key === 'delete') onDelete?.(doc.id);
+                  if (key === 'reviewers') onManageReviewers?.(doc.id);
+                }}
+              >
+                {canManageReviewers && (
+                  <DropdownItem key="reviewers" startContent={<UserCheck size={15} />} className="text-white">
+                    Manage Reviewers
+                  </DropdownItem>
+                )}
+                {canDelete && (
+                  <DropdownItem key="delete" color="danger" startContent={<Trash2 size={15} />} className="text-danger">
+                    Delete Document
+                  </DropdownItem>
+                )}
+              </DropdownMenu>
+            </Dropdown>
+          ) : (
+            <div className="w-8" />
+          )}
         </div>
       </CardBody>
     </Card>

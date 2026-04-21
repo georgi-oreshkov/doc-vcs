@@ -14,6 +14,8 @@ export default function DocumentViewerView() {
   const [diffMode, setDiffMode] = useState('split');
   const [renderedDiff, setRenderedDiff] = useState(null);
   const [diffRendering, setDiffRendering] = useState(false);
+  const [v1Preview, setV1Preview] = useState(null);
+  const [v1PreviewLoading, setV1PreviewLoading] = useState(false);
 
   const { isOpen: isNewVersionOpen, onOpen: onNewVersionOpen, onOpenChange: onNewVersionOpenChange } = useDisclosure();
 
@@ -21,13 +23,15 @@ export default function DocumentViewerView() {
   const { data: versionsData, isLoading: versionsLoading } = useVersions(docId, { page: 0, size: 100 });
   const rollback = useRollbackVersion();
 
-  const versions = (versionsData?.content || versionsData || []).map((v, i) => ({
-    ...v,
-    value: i,
-    label: formatVersionNumber(v.version_number),
-    msg: `Version ${v.version_number}`,
-    date: v.created_at ? new Date(v.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) : '',
-  }));
+  const versions = (versionsData?.content || versionsData || [])
+    .map(v => ({
+      ...v,
+      label: formatVersionNumber(v.version_number),
+      msg: `Version ${v.version_number}`,
+      date: v.created_at ? new Date(v.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) : '',
+    }))
+    .sort((a, b) => a.version_number - b.version_number)
+    .map((v, i) => ({ ...v, value: i }));
 
   const [sliderIndex, setSliderIndex] = useState(null);
   const effectiveIndex = sliderIndex ?? (versions.length > 0 ? versions.length - 1 : 0);
@@ -46,6 +50,7 @@ export default function DocumentViewerView() {
   useEffect(() => {
     if (!diffData?.diff) {
       setRenderedDiff(null);
+      setDiffRendering(false);
       return;
     }
 
@@ -81,6 +86,41 @@ export default function DocumentViewerView() {
 
     return () => { cancelled = true; };
   }, [diffData]);
+
+  // When viewing v1 (no previous version), fetch the document content and show
+  // the first ~15 lines as a preview since there is no diff to display.
+  const isV1 = effectiveIndex === 0 && versions.length > 0;
+  const selectedVersionId = selectedVersion?.id;
+
+  useEffect(() => {
+    if (!isV1 || !selectedVersionId || !docId) {
+      setV1Preview(null);
+      setV1PreviewLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setV1PreviewLoading(true);
+    setV1Preview(null);
+
+    (async () => {
+      try {
+        const { download_url } = await getVersionDownloadUrl(docId, selectedVersionId);
+        const urlStr = String(download_url ?? '');
+        if (!urlStr || cancelled) return;
+        const resp = await fetch(urlStr);
+        if (cancelled) return;
+        const text = await resp.text();
+        if (!cancelled) setV1Preview(text.split('\n').slice(0, 15).join('\n'));
+      } catch (err) {
+        console.error('[DocumentViewer] v1 preview failed:', err);
+      } finally {
+        if (!cancelled) setV1PreviewLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [isV1, selectedVersionId, docId]);
 
   const handleDownload = async () => {
     if (!selectedVersion) return;
@@ -170,7 +210,7 @@ export default function DocumentViewerView() {
       <div className="flex-grow bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden flex flex-col relative">
         <div className="bg-zinc-900 border-b border-zinc-800 p-3 flex justify-between items-center">
           <div className="text-sm font-medium flex items-center gap-2">
-            <span className="bg-zinc-800 px-2 py-0.5 rounded text-xs font-mono text-zinc-300">{prevVersion ? prevVersion.label : 'None'}</span>
+            <span className="bg-zinc-800 px-2 py-0.5 rounded text-xs font-mono text-zinc-300">{prevVersion ? prevVersion.label : 'Initial'}</span>
             <span className="text-zinc-500">&rarr;</span>
             <span className="bg-lime-500/20 border border-lime-500/30 px-2 py-0.5 rounded text-xs font-mono text-lime-400 font-bold">{selectedVersion?.label || '—'}</span>
           </div>
@@ -182,7 +222,7 @@ export default function DocumentViewerView() {
         </div>
 
         <div className="flex-grow overflow-auto font-mono text-sm bg-zinc-950/50">
-          {diffLoading || diffRendering ? (
+          {diffLoading || diffRendering || v1PreviewLoading ? (
             <div className="flex justify-center items-center h-full"><Spinner color="primary" /></div>
           ) : renderedDiff ? (
             diffMode === 'split' ? (
@@ -190,6 +230,8 @@ export default function DocumentViewerView() {
             ) : (
               <UnifiedDiffView diff={renderedDiff} />
             )
+          ) : v1Preview !== null ? (
+            <V1PreviewView content={v1Preview} />
           ) : (
             <div className="flex items-center justify-center h-full text-zinc-600 p-8">
               {versions.length === 0 ? 'No versions available.' : 'Select a version to see the diff.'}
@@ -220,12 +262,12 @@ function lineClass(line) {
 function UnifiedDiffView({ diff }) {
   const lines = diff.split('\n');
   return (
-    <table className="w-full border-collapse text-xs">
+    <table className="w-full table-fixed border-collapse text-xs">
       <tbody>
         {lines.map((line, i) => (
           <tr key={i} className={lineClass(line)}>
             <td className="select-none w-12 text-right pr-4 py-0.5 text-zinc-600 border-r border-zinc-800">{i + 1}</td>
-            <td className="px-4 py-0.5 whitespace-pre">{line || ' '}</td>
+            <td className="px-4 py-0.5 whitespace-pre-wrap break-all">{line || ' '}</td>
           </tr>
         ))}
       </tbody>
@@ -254,22 +296,38 @@ function SplitDiffView({ diff }) {
   const maxLen = Math.max(leftLines.length, rightLines.length);
 
   return (
-    <table className="w-full border-collapse text-xs">
+    <table className="w-full table-fixed border-collapse text-xs">
       <tbody>
         {Array.from({ length: maxLen }, (_, i) => {
           const left = leftLines[i] ?? '';
           const right = rightLines[i] ?? '';
           return (
             <tr key={i}>
-              <td className={`px-4 py-0.5 whitespace-pre w-1/2 border-r border-zinc-800 ${left ? lineClass(left) : 'text-zinc-700'}`}>
+              <td className={`px-4 py-0.5 whitespace-pre-wrap break-all w-1/2 border-r border-zinc-800 ${left ? lineClass(left) : 'text-zinc-700'}`}>
                 {left || ' '}
               </td>
-              <td className={`px-4 py-0.5 whitespace-pre w-1/2 ${right ? lineClass(right) : 'text-zinc-700'}`}>
+              <td className={`px-4 py-0.5 whitespace-pre-wrap break-all w-1/2 ${right ? lineClass(right) : 'text-zinc-700'}`}>
                 {right || ' '}
               </td>
             </tr>
           );
         })}
+      </tbody>
+    </table>
+  );
+}
+
+function V1PreviewView({ content }) {
+  const lines = content.split('\n');
+  return (
+    <table className="w-full table-fixed border-collapse text-xs">
+      <tbody>
+        {lines.map((line, i) => (
+          <tr key={i} className="text-emerald-400 bg-emerald-950/40">
+            <td className="select-none w-12 text-right pr-4 py-0.5 text-zinc-600 border-r border-zinc-800">{i + 1}</td>
+            <td className="px-4 py-0.5 whitespace-pre-wrap break-all">{line || ' '}</td>
+          </tr>
+        ))}
       </tbody>
     </table>
   );
