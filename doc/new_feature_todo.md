@@ -1,0 +1,2 @@
+- [ ] update when adding users to an organization, one should be able to search users by username or email or first or last name.
+- [ ]
