@@ -20,13 +20,43 @@ export default function NewDocumentModal({ isOpen, onOpenChange, onSave, isSavin
     const [file, setFile] = useState(null);
     const [uploading, setUploading] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState(new Set([]));
+    const [isDragging, setIsDragging] = useState(false); // Добавен стейт за влачене
     const fileInputRef = useRef(null);
     const { selectedOrg } = useOrg();
 
-    // Function to handle file selection
+    // Хващане на файл чрез кликане
     const handleFileChange = (e) => {
         if (e.target.files && e.target.files[0]) {
             setFile(e.target.files[0]);
+        }
+    };
+
+    // БРОНИРАН DRAG & DROP
+    const handleDragEnter = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+    };
+
+    const handleDragLeave = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+    };
+
+    const handleDragOver = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        e.stopPropagation(); // Спира отварянето на файла в браузъра
+        setIsDragging(false);
+
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            setFile(e.dataTransfer.files[0]);
         }
     };
 
@@ -34,9 +64,10 @@ export default function NewDocumentModal({ isOpen, onOpenChange, onSave, isSavin
         setTitle("");
         setFile(null);
         setSelectedCategory(new Set([]));
+        setIsDragging(false);
     };
 
-    // Function to handle saving the document
+    // Функция за handle saving
     const handleSave = async (onClose) => {
         if (!file || !title) {
             console.error("Missing title or file");
@@ -54,23 +85,18 @@ export default function NewDocumentModal({ isOpen, onOpenChange, onSave, isSavin
         try {
             setUploading(true);
 
-            // If parent component provides onSave callback, use it (e.g., DocumentsView)
             if (onSave) {
                 await onSave(docData, file, onClose);
                 resetForm();
             } else {
-                // Otherwise, handle the upload ourselves
-                // 1. Create the document and get presigned upload URL
                 const response = await createDocument(selectedOrg.id, docData);
 
                 if (!response.upload_url) {
                     throw new Error("Failed to get presigned URL");
                 }
 
-                // 2. Upload file to S3
                 await uploadFileToS3(response.upload_url, file);
 
-                // 3. Reset UI
                 resetForm();
                 onClose();
             }
@@ -133,9 +159,17 @@ export default function NewDocumentModal({ isOpen, onOpenChange, onSave, isSavin
                                 {!file ? (
                                     <div
                                         onClick={() => fileInputRef.current?.click()}
-                                        className="border-2 border-dashed border-zinc-700 hover:border-zinc-500 hover:bg-zinc-900/50 transition-colors rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer gap-2"
+                                        onDragEnter={handleDragEnter}
+                                        onDragOver={handleDragOver}
+                                        onDragLeave={handleDragLeave}
+                                        onDrop={handleDrop}
+                                        className={`border-2 border-dashed transition-colors rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer gap-2 ${
+                                            isDragging 
+                                                ? 'border-lime-500 bg-zinc-900/80' 
+                                                : 'border-zinc-700 hover:border-zinc-500 hover:bg-zinc-900/50'
+                                        }`}
                                     >
-                                        <UploadCloud className="text-zinc-500" size={32} />
+                                        <UploadCloud className={`${isDragging ? 'text-lime-500' : 'text-zinc-500'}`} size={32} />
                                         <p className="text-sm text-zinc-300">Click to browse or drag and drop</p>
                                         <p className="text-xs text-zinc-500">PDF, DOCX, XLSX up to 50MB</p>
                                     </div>
@@ -148,12 +182,11 @@ export default function NewDocumentModal({ isOpen, onOpenChange, onSave, isSavin
                                                 <p className="text-xs text-zinc-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                                             </div>
                                         </div>
-                                        <Button isIconOnly variant="light" size="sm" onClick={() => setFile(null)}>
+                                        <Button isIconOnly variant="light" size="sm" onPress={() => setFile(null)}>
                                             <X className="text-zinc-400 hover:text-red-400" size={18} />
                                         </Button>
                                     </div>
                                 )}
-                                {/* Hidden File Input */}
                                 <input
                                     type="file"
                                     ref={fileInputRef}
@@ -164,7 +197,7 @@ export default function NewDocumentModal({ isOpen, onOpenChange, onSave, isSavin
 
                         </ModalBody>
                         <ModalFooter>
-                            <Button color="danger" variant="light" onPress={onClose}>
+                            <Button color="danger" variant="light" onPress={() => { resetForm(); onClose(); }}>
                                 Cancel
                             </Button>
                             <Button
