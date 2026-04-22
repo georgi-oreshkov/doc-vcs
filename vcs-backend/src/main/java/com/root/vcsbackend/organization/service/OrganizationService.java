@@ -115,18 +115,13 @@ public class OrganizationService {
             orgMembershipRepository.save(
                 OrgMembershipEntity.builder().orgId(orgId).userId(userId).build());
         }
-        // Replace all roles
+        // Replace all roles — use native ON CONFLICT DO NOTHING to be idempotent
         orgUserRoleRepository.deleteByOrgIdAndUserId(orgId, userId);
-        List<OrgUserRoleEntity> saved = req.getRoles().stream()
+        req.getRoles().stream()
+            .map(r -> r.getValue())
             .distinct()
-            .map(r -> orgUserRoleRepository.save(
-                OrgUserRoleEntity.builder()
-                    .orgId(orgId)
-                    .userId(userId)
-                    .role(OrgRole.valueOf(r.getValue()))
-                    .build()))
-            .toList();
-        return saved;
+            .forEach(role -> orgUserRoleRepository.insertRoleIfAbsent(orgId, userId, role));
+        return orgUserRoleRepository.findByOrgIdAndUserId(orgId, userId);
     }
 
     @PreAuthorize("@orgRoleEvaluator.hasRole(#orgId, authentication, 'ADMIN')")
