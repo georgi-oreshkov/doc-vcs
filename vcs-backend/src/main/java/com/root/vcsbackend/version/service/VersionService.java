@@ -1,9 +1,11 @@
 package com.root.vcsbackend.version.service;
 
 import com.root.vcsbackend.document.api.DocumentFacade;
+import com.root.vcsbackend.document.api.DocumentSummary;
 import com.root.vcsbackend.model.CreateVersionRequest;
 import com.root.vcsbackend.model.DiffResponse;
 import com.root.vcsbackend.model.GetVersionDownloadUrl200Response;
+import com.root.vcsbackend.model.PendingReviewItem;
 import com.root.vcsbackend.model.RejectVersionRequest;
 import com.root.vcsbackend.model.S3UploadResponse;
 import com.root.vcsbackend.notification.api.NotificationEvent;
@@ -33,6 +35,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -110,6 +113,27 @@ public class VersionService {
     public Page<VersionEntity> listVersions(UUID docId, int page, int size) {
         documentFacade.requireExists(docId);
         return versionRepository.findByDocIdOrderByVersionNumberDesc(docId, PageRequest.of(page, size));
+    }
+
+    @Transactional(readOnly = true)
+    @PreAuthorize("isAuthenticated()")
+    public List<PendingReviewItem> listPendingReviewVersions(UUID reviewerId) {
+        return documentFacade.findDocIdsByReviewerId(reviewerId).stream()
+                .flatMap(docId -> {
+                    DocumentSummary summary = documentFacade.getDocumentSummary(docId);
+                    return versionRepository.findByDocIdOrderByVersionNumberDesc(docId).stream()
+                            .filter(v -> v.getStatus() == VersionStatus.PENDING
+                                    && Boolean.FALSE.equals(v.getIsDraft()))
+                            .map(v -> new PendingReviewItem()
+                                    .versionId(v.getId())
+                                    .docId(docId)
+                                    .docName(summary.name())
+                                    .authorId(summary.authorId())
+                                    .versionNumber(v.getVersionNumber())
+                                    .createdAt(v.getCreatedAt() != null
+                                            ? v.getCreatedAt().atOffset(ZoneOffset.UTC) : null));
+                })
+                .toList();
     }
 
     @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")

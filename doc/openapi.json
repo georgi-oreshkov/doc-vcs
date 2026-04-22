@@ -479,6 +479,41 @@
             "$ref": "#/components/schemas/PageMeta"
           }
         }
+      },
+      "PendingReviewItem": {
+        "type": "object",
+        "required": [
+          "version_id",
+          "doc_id",
+          "doc_name",
+          "author_id",
+          "version_number",
+          "created_at"
+        ],
+        "properties": {
+          "version_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "doc_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "doc_name": {
+            "type": "string"
+          },
+          "author_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version_number": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       }
     },
     "responses": {
@@ -1888,6 +1923,33 @@
                   "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/ForkRequest"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/versions/pending-review": {
+      "get": {
+        "operationId": "listPendingReviewVersions",
+        "summary": "List versions pending review assigned to current user",
+        "tags": [
+          "Versions"
+        ],
+        "responses": {
+          "200": {
+            "description": "Versions awaiting review by the authenticated reviewer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PendingReviewItem"
                   }
                 }
               }

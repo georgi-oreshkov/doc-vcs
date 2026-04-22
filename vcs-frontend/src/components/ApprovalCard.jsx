@@ -35,7 +35,7 @@ export default function ApprovalCard({ req, onApprove, onReject, onView }) {
             variant="flat" 
             className="flex-1 sm:flex-none font-medium"
             startContent={<X size={16} />}
-            onPress={() => onReject(req.id)}
+            onPress={() => onReject(req)}
           >
             Reject
           </Button>
@@ -43,7 +43,7 @@ export default function ApprovalCard({ req, onApprove, onReject, onView }) {
             color="success" 
             className="flex-1 sm:flex-none text-white font-medium shadow-[0_0_15px_rgba(34,197,94,0.3)]"
             startContent={<Check size={16} />}
-            onPress={() => onApprove(req.id)}
+            onPress={() => onApprove(req)}
           >
             Approve
           </Button>

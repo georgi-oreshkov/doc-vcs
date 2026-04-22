@@ -12,6 +12,7 @@ import {
   getComments,
   addComment,
   uploadFileToS3,
+  getPendingReviewVersions,
 } from '../api/versionsApi';
 import { connectNotificationsStream } from '../api/notificationsApi';
 
@@ -70,6 +71,7 @@ export function useApproveVersion() {
       qc.invalidateQueries({ queryKey: ['documents', docId, 'versions'] });
       qc.invalidateQueries({ queryKey: ['documents', docId] });
       qc.invalidateQueries({ queryKey: ['requests'] });
+      qc.invalidateQueries({ queryKey: ['pendingReviewVersions'] });
     },
   });
 }
@@ -82,7 +84,15 @@ export function useRejectVersion() {
       qc.invalidateQueries({ queryKey: ['documents', docId, 'versions'] });
       qc.invalidateQueries({ queryKey: ['documents', docId] });
       qc.invalidateQueries({ queryKey: ['requests'] });
+      qc.invalidateQueries({ queryKey: ['pendingReviewVersions'] });
     },
+  });
+}
+
+export function usePendingReviewVersions() {
+  return useQuery({
+    queryKey: ['pendingReviewVersions'],
+    queryFn: getPendingReviewVersions,
   });
 }
 

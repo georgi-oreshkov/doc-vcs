@@ -61,6 +61,13 @@ public class DocumentFacade {
         return resolveDocument(docId).getReviewerIds();
     }
 
+    /** Returns IDs of all documents where the given user is an assigned reviewer. */
+    @Transactional(readOnly = true)
+    public List<UUID> findDocIdsByReviewerId(UUID reviewerId) {
+        return documentRepository.findByReviewerContaining(reviewerId).stream()
+                .map(DocumentEntity::getId).toList();
+    }
+
     // ── Write ────────────────────────────────────────────────────────────────
 
     /** Called by VersionService after creating a new version. */

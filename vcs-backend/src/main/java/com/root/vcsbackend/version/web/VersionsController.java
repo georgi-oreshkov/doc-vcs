@@ -7,6 +7,7 @@ import com.root.vcsbackend.model.CreateVersionRequest;
 import com.root.vcsbackend.model.DiffResponse;
 import com.root.vcsbackend.model.GetVersionDownloadUrl200Response;
 import com.root.vcsbackend.model.PagedVersions;
+import com.root.vcsbackend.model.PendingReviewItem;
 import com.root.vcsbackend.model.RejectVersionRequest;
 import com.root.vcsbackend.model.S3UploadResponse;
 import com.root.vcsbackend.model.Version;
@@ -95,6 +96,12 @@ public class VersionsController implements VersionsApi {
                                                @Nullable RejectVersionRequest req) {
         versionService.rejectVersion(docId, versionId, securityHelper.currentUser().userId(), req);
         return ResponseEntity.ok().build();
+    }
+
+    @Override
+    public ResponseEntity<List<PendingReviewItem>> listPendingReviewVersions() {
+        UUID callerId = securityHelper.currentUser().userId();
+        return ResponseEntity.ok(versionService.listPendingReviewVersions(callerId));
     }
 
     @Override
