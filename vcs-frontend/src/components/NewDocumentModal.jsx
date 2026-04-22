@@ -143,7 +143,7 @@ export default function NewDocumentModal({ isOpen, onOpenChange, onSave, isSavin
                                         onSelectionChange={setSelectedCategory}
                                         classNames={{
                                             trigger: "border-zinc-800 bg-zinc-900/50 hover:border-zinc-700",
-                                            value: "text-white"
+                                            value: "!text-white"
                                         }}
                                     >
                                         {categories.map((c) => (

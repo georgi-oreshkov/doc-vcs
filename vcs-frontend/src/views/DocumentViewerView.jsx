@@ -327,12 +327,21 @@ export default function DocumentViewerView() {
               placeholder="Explain why this version is being rejected..."
               value={rejectReason}
               onValueChange={setRejectReason}
-              classNames={{ input: 'text-white', label: 'text-zinc-400' }}
+              variant="bordered"
+              classNames={{ 
+                input: 'text-white',
+                label: 'text-zinc-400',
+                inputWrapper: '!bg-transparent border-white hover:border-lime-500 data-[focus=true]:border-lime-500'
+             }}
               minRows={3}
             />
           </ModalBody>
           <ModalFooter>
-            <Button variant="flat" onPress={() => setShowRejectModal(false)}>Cancel</Button>
+            <Button 
+            color="primary" variant="light"
+            onPress={() => setShowRejectModal(false)}>
+              Cancel
+            </Button>
             <Button color="danger" onPress={handleRejectConfirm} isLoading={rejectVersion.isPending}>Reject</Button>
           </ModalFooter>
         </ModalContent>
