@@ -287,7 +287,8 @@ public class VersionService {
     }
 
     private void requireRole(UUID orgId, UUID userId, String... roles) {
-        boolean ok = orgRoleLookup.findRole(orgId, userId).map(role -> Arrays.asList(roles).contains(role)).orElse(false);
+        List<String> userRoles = orgRoleLookup.findRoles(orgId, userId);
+        boolean ok = userRoles.stream().anyMatch(r -> Arrays.asList(roles).contains(r));
         if (!ok) throw new AppException(HttpStatus.FORBIDDEN, "Required role: " + Arrays.toString(roles));
     }
 }
