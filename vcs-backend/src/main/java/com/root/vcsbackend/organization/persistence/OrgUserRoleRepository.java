@@ -19,7 +19,7 @@ public interface OrgUserRoleRepository extends JpaRepository<OrgUserRoleEntity, 
 
     boolean existsByOrgIdAndUserId(UUID orgId, UUID userId);
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Transactional
     void deleteByOrgIdAndUserId(UUID orgId, UUID userId);
 }

@@ -52,7 +52,7 @@ export default function App() {
         </Routes>
       </div>
      
-      <footer className="border-t border-zinc-800 bg-black py-8 text-center text-zinc-500 text-sm mt-auto z-10 relative">
+      <footer className="border-t border-zinc-800 bg-black py-8 text-center text-zinc-500 text-sm z-10 relative">
         <p>&copy; 2026 Root Version Control. All rights reserved.</p>
       </footer>
     </div>

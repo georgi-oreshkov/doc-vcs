@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Table, TableHeader, TableColumn, TableBody, TableRow, TableCell,
   Button, Chip, Select, SelectItem, Spinner, useDisclosure, User,
@@ -17,8 +17,12 @@ export default function AdminMembersTab({ orgId }) {
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
   const [removingId, setRemovingId] = useState(null);
 
+  const debounceRef = useRef({});
   const handleRolesChange = (userId, roles) => {
-    addUser.mutate({ orgId, data: { user_id: userId, roles } });
+    clearTimeout(debounceRef.current[userId]);
+    debounceRef.current[userId] = setTimeout(() => {
+      addUser.mutate({ orgId, data: { user_id: userId, roles } });
+    }, 600);
   };
 
   const handleRemove = (userId) => {

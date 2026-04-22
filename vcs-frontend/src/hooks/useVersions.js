@@ -232,7 +232,7 @@ export function useUploadVersion(docId, versions) {
             const diffBlob = new Blob([diff], { type: 'text/plain' });
             if (diffBlob.size < file.size) {
               isDiff = true;
-              diffPreview = diff.substring(0, 500);
+              diffPreview = diff.split('\n').slice(0, 30).join('\n');
               contentToUpload = diffBlob;
             }
           }

@@ -105,6 +105,7 @@ public class OrganizationService {
     /**
      * Add or replace a member's roles in the org (replaces all existing roles for that user).
      */
+    @Transactional
     @PreAuthorize("@orgRoleEvaluator.hasRole(#orgId, authentication, 'ADMIN')")
     public List<OrgUserRoleEntity> upsertOrgUserRoles(UUID orgId, OrgUser req) {
         resolve(orgId);
@@ -117,6 +118,7 @@ public class OrganizationService {
         // Replace all roles
         orgUserRoleRepository.deleteByOrgIdAndUserId(orgId, userId);
         List<OrgUserRoleEntity> saved = req.getRoles().stream()
+            .distinct()
             .map(r -> orgUserRoleRepository.save(
                 OrgUserRoleEntity.builder()
                     .orgId(orgId)

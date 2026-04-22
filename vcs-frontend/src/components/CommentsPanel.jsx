@@ -45,7 +45,7 @@ export default function CommentsPanel({ docId, versionId }) {
       </div>
 
       {/* Comment list */}
-      <div className="divide-y divide-zinc-800/60">
+      <div className="divide-y divide-zinc-800/60 min-h-[220px] max-h-[400px] overflow-y-auto">
         {isLoading ? (
           <div className="flex justify-center py-8">
             <Spinner size="sm" color="primary" />
@@ -75,8 +75,8 @@ export default function CommentsPanel({ docId, versionId }) {
           value={content}
           onValueChange={setContent}
           onKeyDown={handleKeyDown}
-          minRows={2}
-          maxRows={6}
+          minRows={3}
+          maxRows={8}
           variant="bordered"
           classNames={{
             input: "text-white placeholder:text-zinc-600 text-sm",

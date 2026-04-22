@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, Slider, ButtonGroup, Spinner, useDisclosure, addToast } from "@heroui/react";
-import { ArrowLeft, History, Download, UploadCloud, RotateCcw, Columns, AlignLeft, Send } from 'lucide-react';
+import { Button, Slider, ButtonGroup, Spinner, useDisclosure, addToast, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Textarea } from "@heroui/react";
+import { ArrowLeft, History, Download, UploadCloud, RotateCcw, Columns, AlignLeft, Send, CheckCircle, XCircle } from 'lucide-react';
 import { useDocument } from '../hooks/useDocuments';
-import { useVersions, useDiff, useRollbackVersion } from '../hooks/useVersions';
+import { useVersions, useDiff, useRollbackVersion, useApproveVersion, useRejectVersion } from '../hooks/useVersions';
 import { formatVersionNumber } from '../api/transforms';
 import { getVersionDownloadUrl, requestReview } from '../api/versionsApi';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useOrg } from '../context/OrgContext';
 import NewVersionModal from '../components/NewVersionModal';
 import CommentsPanel from '../components/CommentsPanel';
 
@@ -21,6 +22,11 @@ export default function DocumentViewerView() {
   const [v1PreviewLoading, setV1PreviewLoading] = useState(false);
 
   const { isOpen: isNewVersionOpen, onOpen: onNewVersionOpen, onOpenChange: onNewVersionOpenChange } = useDisclosure();
+  const [rejectReason, setRejectReason] = useState('');
+  const [showRejectModal, setShowRejectModal] = useState(false);
+
+  const { activeRoles } = useOrg();
+  const isReviewer = activeRoles.includes('REVIEWER') || activeRoles.includes('ADMIN');
 
   const { data: doc, isLoading: docLoading } = useDocument(docId);
   const { data: versionsData, isLoading: versionsLoading } = useVersions(docId, { page: 0, size: 100 });
@@ -42,18 +48,35 @@ export default function DocumentViewerView() {
   const prevVersion = effectiveIndex > 0 ? versions[effectiveIndex - 1] : null;
   const isLatest = effectiveIndex === versions.length - 1;
 
-  // NEW: Request Review Mutation
+  // Request Review Mutation
   const reviewMutation = useMutation({
     mutationFn: () => requestReview(docId, selectedVersion.id),
     onSuccess: () => {
       addToast({ title: 'Review Requested', description: 'Reviewers have been notified.', color: 'success' });
-      queryClient.invalidateQueries(['versions', docId]);
-      queryClient.invalidateQueries(['document', docId]);
+      queryClient.invalidateQueries({ queryKey: ['documents', docId, 'versions'] });
+      queryClient.invalidateQueries({ queryKey: ['documents', docId] });
     },
     onError: (err) => {
       addToast({ title: 'Failed to request review', description: err?.message, color: 'danger' });
     }
   });
+
+  const approveVersion = useApproveVersion();
+  const rejectVersion = useRejectVersion();
+
+  const handleApprove = () => {
+    approveVersion.mutate(
+      { docId, versionId: selectedVersion.id },
+      { onSuccess: () => addToast({ title: 'Approved', description: 'Version approved.', color: 'success' }) }
+    );
+  };
+
+  const handleRejectConfirm = () => {
+    rejectVersion.mutate(
+      { docId, versionId: selectedVersion.id, data: rejectReason.trim() ? { reason: rejectReason.trim() } : {} },
+      { onSuccess: () => { setShowRejectModal(false); setRejectReason(''); addToast({ title: 'Rejected', color: 'warning' }); } }
+    );
+  };
 
   const { data: diffData, isLoading: diffLoading } = useDiff(docId, prevVersion?.id, selectedVersion?.id);
 
@@ -108,7 +131,7 @@ export default function DocumentViewerView() {
         const resp = await fetch(download_url);
         if (cancelled) return;
         const text = await resp.text();
-        if (!cancelled) setV1Preview(text.split('\n').slice(0, 15).join('\n'));
+        if (!cancelled) setV1Preview(text.split('\n').slice(0, 30).join('\n'));
       } catch (err) {
         console.error(err);
       } finally {
@@ -135,7 +158,7 @@ export default function DocumentViewerView() {
   if (docLoading || versionsLoading) return <div className="flex justify-center py-40"><Spinner color="primary" size="lg" /></div>;
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8 w-full z-10 flex-grow flex flex-col relative h-[calc(100vh-80px)]">
+    <div className="max-w-7xl mx-auto px-6 py-8 w-full z-10 flex-grow flex flex-col relative">
       <div className="flex items-center gap-2 text-sm text-zinc-500 mb-6 border-b border-zinc-800 pb-4">
         <button onClick={() => navigate(-1)} className="flex items-center gap-1 hover:text-white transition"><ArrowLeft size={16} /> Back</button>
         <span>/</span>
@@ -164,11 +187,21 @@ export default function DocumentViewerView() {
             </div>
           )}
           
-          {/* THE NEW BUTTON */}
           {selectedVersion?.status === 'DRAFT' && (
             <Button color="secondary" startContent={<Send size={16} />} onPress={() => reviewMutation.mutate()} isLoading={reviewMutation.isPending}>
               Request Review
             </Button>
+          )}
+
+          {selectedVersion?.status === 'PENDING' && isReviewer && (
+            <>
+              <Button color="success" variant="flat" startContent={<CheckCircle size={16} />} onPress={handleApprove} isLoading={approveVersion.isPending}>
+                Approve
+              </Button>
+              <Button color="danger" variant="flat" startContent={<XCircle size={16} />} onPress={() => setShowRejectModal(true)}>
+                Reject
+              </Button>
+            </>
           )}
 
           <Button variant="bordered" className="border-zinc-700 text-zinc-300" startContent={<Download size={18} />} onPress={handleDownload}>Download</Button>
@@ -181,7 +214,7 @@ export default function DocumentViewerView() {
         </div>
       </div>
 
-      <div className="flex-grow bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden flex flex-col relative">
+      <div className="flex-grow min-h-[400px] bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden flex flex-col relative">
         <div className="bg-zinc-900 border-b border-zinc-800 p-3 flex justify-between items-center">
           <div className="text-sm font-medium flex items-center gap-2">
             <span className="bg-zinc-800 px-2 py-0.5 rounded text-xs font-mono text-zinc-300">{prevVersion ? prevVersion.label : 'Initial'}</span>
@@ -211,6 +244,27 @@ export default function DocumentViewerView() {
       {selectedVersion && (
         <CommentsPanel docId={docId} versionId={selectedVersion.id} />
       )}
+
+      {/* Reject reason modal */}
+      <Modal isOpen={showRejectModal} onOpenChange={(open) => { if (!open) setShowRejectModal(false); }}>
+        <ModalContent className="bg-zinc-900 border border-zinc-800">
+          <ModalHeader className="text-white">Reject Version</ModalHeader>
+          <ModalBody>
+            <Textarea
+              label="Reason (optional)"
+              placeholder="Explain why this version is being rejected..."
+              value={rejectReason}
+              onValueChange={setRejectReason}
+              classNames={{ input: 'text-white', label: 'text-zinc-400' }}
+              minRows={3}
+            />
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="flat" onPress={() => setShowRejectModal(false)}>Cancel</Button>
+            <Button color="danger" onPress={handleRejectConfirm} isLoading={rejectVersion.isPending}>Reject</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }
