@@ -16,7 +16,6 @@ function timeAgo(iso) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-// Тема: Lime-500 акценти и Zinc-900 фонове
 const getNotificationStyle = (type = '', payload = {}) => {
   const t = String(type).toUpperCase();
   const msg = String(payload?.message || '').toUpperCase();
@@ -88,13 +87,16 @@ export default function NotificationMenu() {
       setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, readAt: new Date().toISOString() } : n));
     }
     
-    const orgId = payload.organizationId || payload.orgId || payload.organization_id;
-    const docId = payload.documentId || payload.docId || payload.document_id;
+    // ПОПРАВКА: Покриваме абсолютно всички възможни формати на ключове
+    const orgId = payload.organizationId || payload.orgId || payload.organization_id || payload.organizationid || payload.org_id;
+    const docId = payload.documentId || payload.docId || payload.document_id || payload.documentid || payload.doc_id;
 
     if (docId && orgId) {
       navigate(`/organizations/${orgId}/documents/${docId}`);
     } else if (docId) {
-      navigate(`/documents/my`);
+      navigate(`/documents/${docId}`);
+    } else if (orgId) {
+      navigate(`/organizations/${orgId}`);
     }
   };
 
@@ -114,10 +116,8 @@ export default function NotificationMenu() {
         </PopoverTrigger>
       </Badge>
 
-      {/* Тук отрязахме излишното пространство: ширина 290px вместо 360px */}
       <PopoverContent className="p-0 bg-zinc-950 border border-zinc-800 rounded-xl w-[230px] shadow-2xl flex flex-col overflow-hidden">
         
-        {/* Хедър с оригиналните големи размери */}
         <div className="flex gap-4 px-4 pt-4 pb-2 border-b border-zinc-800/50 shrink-0">
           {['unread', 'all'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-2 text-sm font-bold uppercase tracking-wider transition-all ${activeTab === tab ? 'border-b-2 border-lime-500 text-lime-500' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
@@ -126,7 +126,6 @@ export default function NotificationMenu() {
           ))}
         </div>
 
-        {/* Бутон "Mark all as read" с оригиналния размер */}
         <div onClick={handleMarkAllRead} className="px-4 py-3 flex items-center gap-2 border-b border-zinc-800/50 text-zinc-400 hover:text-white hover:bg-zinc-900 cursor-pointer transition-colors text-xs font-medium uppercase shrink-0">
           <Check size={16} className="text-lime-500" /> Mark all as read
         </div>
@@ -138,7 +137,6 @@ export default function NotificationMenu() {
             notifications.slice(0, 5).map((notif) => {
               const { title, desc, style } = parseNotification(notif);
               return (
-                // Върнати са оригиналните големи отстъпи (p-4) и размери на шрифта
                 <div key={notif.id} onClick={() => handleAction(notif)} className={`p-4 flex gap-3 cursor-pointer border-b border-zinc-800/30 last:border-b-0 hover:bg-zinc-900 transition-colors ${!notif.readAt ? 'bg-lime-500/[0.03]' : ''}`}>
                   <div className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 ${style.bg}`}>
                     {style.icon}
