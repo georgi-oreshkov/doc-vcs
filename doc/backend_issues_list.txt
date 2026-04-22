@@ -1,54 +1,13 @@
-- request to get the version list with details fails with 500. This only happens on the one document i recently uploaded a new version. can confirm it happens to all documents now. something is seriously wrong.
+- version reviews leak across users.
+- this error:
+2026-04-22T15:35:43.729Z  WARN 1 --- [vcs-backend] [nio-8080-exec-4] .m.m.a.ExceptionHandlerExceptionResolver : Failure in @ExceptionHandler com.root.vcsbackend.shared.exception.GlobalExceptionHandler#handleGeneric(Exception)
 
-
-backend log: 2026-04-22T12:29:53.589Z ERROR 1 --- [vcs-backend] [nio-8080-exec-5] c.r.v.s.e.GlobalExceptionHandler         : Unhandled exception
-
-2026-04-22T12:48:20.034Z ERROR 1 --- [vcs-backend] [nio-8080-exec-6] c.r.v.s.e.GlobalExceptionHandler         : Unhandled exception
-
-java.lang.IllegalArgumentException: Unexpected value 'DRAFT'
-        at com.root.vcsbackend.model.Version$StatusEnum.fromValue(Version.java:68) ~[!/:0.0.1-SNAPSHOT]
-        at com.root.vcsbackend.version.mapper.VersionMapper.versionStatusToApi(VersionMapper.java:57) ~[!/:0.0.1-SNAPSHOT]
-        at com.root.vcsbackend.version.mapper.VersionMapperImpl.toDto(VersionMapperImpl.java:35) ~[!/:0.0.1-SNAPSHOT]
-        at java.base/java.util.stream.ReferencePipeline$3$1.accept(Unknown Source) ~[na:na]
-        at java.base/java.util.ArrayList$ArrayListSpliterator.forEachRemaining(Unknown Source) ~[na:na]
-        at java.base/java.util.stream.AbstractPipeline.copyInto(Unknown Source) ~[na:na]
-        at java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(Unknown Source) ~[na:na]
-        at java.base/java.util.stream.AbstractPipeline.evaluate(Unknown Source) ~[na:na]
-        at java.base/java.util.stream.AbstractPipeline.evaluateToArrayNode(Unknown Source) ~[na:na]
-        at java.base/java.util.stream.ReferencePipeline.toArray(Unknown Source) ~[na:na]
-        at java.base/java.util.stream.ReferencePipeline.toArray(Unknown Source) ~[na:na]
-        at java.base/java.util.stream.ReferencePipeline.toList(Unknown Source) ~[na:na]
-        at com.root.vcsbackend.version.web.VersionsController.listVersions(VersionsController.java:109) ~[!/:0.0.1-SNAPSHOT]
-        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Unknown Source) ~[na:na]
-        at java.base/java.lang.reflect.Method.invoke(Unknown Source) ~[na:na]
-        at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:359) ~[spring-aop-7.0.5.jar!/:7.0.5]
-        at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:190) ~[spring-aop-7.0.5.jar!/:7.0.5]
-        at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:158) ~[spring-aop-7.0.5.jar!/:7.0.5]
-        at org.springframework.validation.beanvalidation.MethodValidationInterceptor.invoke(MethodValidationInterceptor.java:172) ~[spring-context-7.0.5.jar!/:7.0.5]
-        at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:179) ~[spring-aop-7.0.5.jar!/:7.0.5]
-        at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:719) ~[spring-aop-7.0.5.jar!/:7.0.5]
-        at com.root.vcsbackend.version.web.VersionsController$$SpringCGLIB$$0.listVersions(<generated>) ~[!/:0.0.1-SNAPSHOT]
-        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Unknown Source) ~[na:na]
-        at java.base/java.lang.reflect.Method.invoke(Unknown Source) ~[na:na]
-        at org.springframework.web.method.support.InvocableHandlerMethod.doInvoke(InvocableHandlerMethod.java:252) ~[spring-web-7.0.5.jar!/:7.0.5]
-        at org.springframework.web.method.support.InvocableHandlerMethod.invokeForRequest(InvocableHandlerMethod.java:184) ~[spring-web-7.0.5.jar!/:7.0.5]
-        at org.springframework.web.servlet.mvc.method.annotation.ServletInvocableHandlerMethod.invokeAndHandle(ServletInvocableHandlerMethod.java:117) ~[spring-webmvc-7.0.5.jar!/:7.0.5]
-        at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.invokeHandlerMethod(RequestMappingHandlerAdapter.java:934) ~[spring-webmvc-7.0.5.jar!/:7.0.5]
-        at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.handleInternal(RequestMappingHandlerAdapter.java:853) ~[spring-webmvc-7.0.5.jar!/:7.0.5]
-        at org.springframework.web.servlet.mvc.method.AbstractHandlerMethodAdapter.handle(AbstractHandlerMethodAdapter.java:86) ~[spring-webmvc-7.0.5.jar!/:7.0.5]
-        at org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:963) ~[spring-webmvc-7.0.5.jar!/:7.0.5]
-        at org.springframework.web.servlet.DispatcherServlet.doService(DispatcherServlet.java:866) ~[spring-webmvc-7.0.5.jar!/:7.0.5]
-        at org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1000) ~[spring-webmvc-7.0.5.jar!/:7.0.5]
-        at org.springframework.web.servlet.FrameworkServlet.doGet(FrameworkServlet.java:892) ~[spring-webmvc-7.0.5.jar!/:7.0.5]
-        at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:622) ~[tomcat-embed-core-11.0.18.jar!/:na]
-        at org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:874) ~[spring-webmvc-7.0.5.jar!/:7.0.5]
-        at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:710) ~[tomcat-embed-core-11.0.18.jar!/:na]
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:128) ~[tomcat-embed-core-11.0.18.jar!/:na]
-        at org.apache.tomcat.websocket.server.WsFilter.doFilter(WsFilter.java:53) ~[tomcat-embed-websocket-11.0.18.jar!/:na]
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:107) ~[tomcat-embed-core-11.0.18.jar!/:na]
-        at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:110) ~[spring-web-7.0.5.jar!/:7.0.5]
-        at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:107) ~[tomcat-embed-core-11.0.18.jar!/:na]
-        at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:108) ~[spring-web-7.0.5.jar!/:7.0.5]
-        at org.springframework.security.web.FilterChainProxy.lambda$doFilterInternal$3(FilterChainProxy.java:235) ~[spring-security-web-7.0.3.jar!/:7.0.3]
-        at org.springframework.security.web.ObservationFilterChainDecorator$FilterObservation$SimpleFilterObservation.lambda$wrap$1(ObservationFilterChainDecorator.java:493) ~[spring-security-web-7.0.3.jar!/:7.0.3]
-        at org.springframework.security.web.ObservationFilterChainDecorator$AroundFilterObservation$SimpleAroundFilterObservation.lambda$wrap$1(ObservationFilterChainDecorator.java:354) ~[spring-security-web-7.0.3.jar!/:7.0.3]
+org.springframework.http.converter.HttpMessageNotWritableException: No converter for [class com.root.vcsbackend.model.ErrorResponse] with preset Content-Type 'text/event-stream'
+        at org.springframework.web.servlet.mvc.method.annotation.AbstractMessageConverterMethodProcessor.writeWithMessageConverters(AbstractMessageConverterMethodProcessor.java:364) ~[spring-webmvc-7.0.5.jar!/:7.0.5]
+        at org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor.handleReturnValue(HttpEntityMethodProcessor.java:261) ~[spring-webmvc-7.0.5.jar!/:7.0.5]
+        at org.springframework.web.method.support.HandlerMethodReturnValueHandlerComposite.handleReturnValue(HandlerMethodReturnValueHandlerComposite.java:78) ~[spring-web-7.0.5.jar!/:7.0.5]
+        at org.springframework.web.servlet.mvc.method.annotation.ServletInvocableHandlerMethod.invokeAndHandle(ServletInvocableHandlerMethod.java:135) ~[spring-webmvc-7.0.5.jar!/:7.0.5]
+        at org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver.doResolveHandlerMethodException(ExceptionHandlerExceptionResolver.java:460) ~[spring-webmvc-7.0.5.jar!/:7.0.5]
+        at org.springframework.web.servlet.handler.AbstractHandlerMethodExceptionResolver.doResolveException(AbstractHandlerMethodExceptionResolver.java:72) ~[spring-webmvc-7.0.5.jar!/:7.0.5]
+        at org.springframework.web.servlet.handler.AbstractHandlerExceptionResolver.resolveException(AbstractHandlerExceptionResolver.java:176) ~[spring-webmvc-7.0.5.jar!/:7.0.5]
+        at org.springframework.web.servlet.handler.HandlerExceptionResolverComposite.resolveException(HandlerExceptionResolverComposite.java:78) ~[spring-webmvc-7.0.5.jar!/:7.0.5]

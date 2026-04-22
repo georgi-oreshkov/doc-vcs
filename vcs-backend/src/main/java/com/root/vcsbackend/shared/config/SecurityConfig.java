@@ -98,8 +98,7 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // SSE stream uses query-param token auth (EventSource can't set headers)
-                .requestMatchers("/auth/login", "/notifications/stream").permitAll()
+                .requestMatchers("/auth/login").permitAll()
                 .requestMatchers("/actuator/health").permitAll()
                 .anyRequest().authenticated()
             )

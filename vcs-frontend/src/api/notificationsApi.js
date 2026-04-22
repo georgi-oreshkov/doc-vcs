@@ -25,27 +25,30 @@ export const markAsRead = (id) =>
   api.post(`/notifications/${id}/read`).then((r) => r.data);
 
 export const connectNotificationsStream = (onMessage) => {
-  const token = getAccessToken();
   const url = `/api/v1/notifications/stream`;
+  let closed = false;
+  let retryDelay = 2000;
+  const controller = new AbortController();
 
-  // If we have a token, use fetch streaming so we can set the Authorization header.
-  // EventSource cannot set headers, and many dev proxies strip query auth.
-  if (token) {
-    const controller = new AbortController();
-    (async () => {
-      try {
-        const res = await fetch(url, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` },
-          signal: controller.signal,
-        });
+  const connect = async () => {
+    if (closed) return;
+    const token = getAccessToken();
+    if (!token) return;
 
-        if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          console.error('notifications SSE fetch failed', res.status, text);
-          return;
-        }
+    try {
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      });
 
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        console.error('notifications SSE fetch failed', res.status, text);
+        // Don't retry on auth errors
+        if (res.status === 401 || res.status === 403) return;
+      } else {
+        retryDelay = 2000; // reset backoff on successful connection
         const reader = res.body.getReader();
         const dec = new TextDecoder('utf-8');
         let buf = '';
@@ -59,7 +62,6 @@ export const connectNotificationsStream = (onMessage) => {
           while ((idx = buf.indexOf('\n\n')) !== -1) {
             const block = buf.slice(0, idx).trim();
             buf = buf.slice(idx + 2);
-            // parse SSE block
             const lines = block.split(/\r?\n/);
             const dataLines = lines.filter(l => l.startsWith('data:')).map(l => l.slice(5).trim());
             if (dataLines.length === 0) continue;
@@ -67,28 +69,18 @@ export const connectNotificationsStream = (onMessage) => {
             try { onMessage(JSON.parse(dataStr)); } catch (e) { console.error('failed to parse notification event', e); }
           }
         }
-      } catch (e) {
-        if (e.name === 'AbortError') return;
-        console.error('notifications SSE fetch error', e);
       }
-    })();
-
-    return { close: () => controller.abort() };
-  }
-
-  // Fallback: try EventSource with access_token query param (no headers possible)
-  const qs = `?access_token=${encodeURIComponent('')}`;
-  const es = new EventSource(url + qs);
-  es.onmessage = (ev) => {
-    try {
-      const parsed = JSON.parse(ev.data);
-      onMessage(parsed);
     } catch (e) {
-      console.error('failed to parse notification event', e);
+      if (e.name === 'AbortError') return;
+      console.warn('notifications SSE fetch error, retrying in', retryDelay, 'ms', e);
+    }
+
+    if (!closed) {
+      setTimeout(connect, retryDelay);
+      retryDelay = Math.min(retryDelay * 2, 30000); // exponential backoff, max 30s
     }
   };
-  es.onerror = (err) => {
-    console.error('notifications SSE error', err);
-  };
-  return es;
+
+  connect();
+  return { close: () => { closed = true; controller.abort(); } };
 };

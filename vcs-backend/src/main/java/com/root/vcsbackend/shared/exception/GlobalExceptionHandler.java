@@ -3,12 +3,14 @@ package com.root.vcsbackend.shared.exception;
 import com.root.vcsbackend.model.ErrorResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import jakarta.servlet.http.HttpServletResponse;
 import java.time.OffsetDateTime;
 import java.util.stream.Collectors;
 
@@ -17,8 +19,9 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(AppException.class)
-    public ResponseEntity<ErrorResponse> handleAppException(AppException ex) {
+    public ResponseEntity<ErrorResponse> handleAppException(AppException ex, HttpServletResponse response) {
         log.warn("Application error: {} (HTTP {})", ex.getMessage(), ex.getStatus().value());
+        if (!response.isCommitted()) response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         ErrorResponse body = new ErrorResponse(ex.getStatus().value(), ex.getMessage());
         body.setTimestamp(OffsetDateTime.now());
         return ResponseEntity.status(ex.getStatus()).body(body);
@@ -26,11 +29,12 @@ public class GlobalExceptionHandler {
 
     /** Handles @Valid / @Validated bean-level constraint failures. */
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
+    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex, HttpServletResponse response) {
         String message = ex.getBindingResult().getFieldErrors().stream()
             .map(FieldError::getDefaultMessage)
             .collect(Collectors.joining(", "));
         log.warn("Validation error: {}", message);
+        if (!response.isCommitted()) response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         ErrorResponse body = new ErrorResponse(HttpStatus.BAD_REQUEST.value(), message);
         body.setTimestamp(OffsetDateTime.now());
         return ResponseEntity.badRequest().body(body);
@@ -38,8 +42,9 @@ public class GlobalExceptionHandler {
 
     /** Catch-all for unexpected exceptions — avoids leaking stack traces. */
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGeneric(Exception ex) {
+    public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, HttpServletResponse response) {
         log.error("Unhandled exception", ex);
+        if (!response.isCommitted()) response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         ErrorResponse body = new ErrorResponse(
             HttpStatus.INTERNAL_SERVER_ERROR.value(),
             "An unexpected error occurred"

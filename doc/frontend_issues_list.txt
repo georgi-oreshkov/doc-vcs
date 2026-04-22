@@ -1,2 +1,116 @@
-- notification doesnt refresh automatically, requires page refresh
-- a lot of components should refresh automatically like when uploading a version, receiving notifications or requests.
+
+- notifications still throw this error:
+notifications SSE fetch error TypeError: Error in input stream notificationsApi.js:72:17
+    connectNotificationsStream http://localhost:5173/src/api/notificationsApi.js:72
+    connectNotificationsStream http://localhost:5173/src/api/notificationsApi.js:74
+    NotificationMenu http://localhost:5173/src/components/navbar/NotificationMenu.jsx:77
+    react_stack_bottom_frame http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:18567
+    runWithFiberInDEV http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:999
+    commitHookEffectListMount http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:9411
+    commitHookPassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:9465
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11040
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11201
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11033
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11201
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11033
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11033
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11201
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11201
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11201
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11033
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11033
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11201
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11033
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11201
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11201
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11033
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11201
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11033
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11033
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11201
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11033
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11201
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11033
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11033
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11201
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11033
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11201
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11033
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11201
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11201
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11033
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11033
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11201
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11033
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11201
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11033
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11201
+    recursivelyTraversePassiveMountEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11010
+    commitPassiveMountOnFiber http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11066
+    flushPassiveEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:13150
+    flushPendingEffects http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:13088
+    performSyncWorkOnRoot http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:13514
+    flushSyncWorkAcrossRoots_impl http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:13414
+    flushSpawnedWork http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:13067
+    commitRoot http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:12804
+    commitRootWhenReady http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:12016
+    performWorkOnRoot http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:11950
+    performWorkOnRootViaSchedulerTask http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:13505
+    performWorkUntilDeadline http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:36
+    (Async: EventHandlerNonNull)
+    js http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:156
+    js http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:266
+    __require2 http://localhost:5173/node_modules/.vite/deps/chunk-PR4QN5HX.js?v=db3cefca:14
+    js http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:277
+    __require2 http://localhost:5173/node_modules/.vite/deps/chunk-PR4QN5HX.js?v=db3cefca:14
+    js http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:17259
+    js http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:20177
+    __require2 http://localhost:5173/node_modules/.vite/deps/chunk-PR4QN5HX.js?v=db3cefca:14
+    js http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:20188
+    __require2 http://localhost:5173/node_modules/.vite/deps/chunk-PR4QN5HX.js?v=db3cefca:14
+    <anonymous> http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=db3cefca:20192
+
+also i get this backend error that could be connected:
+2026-04-22T15:36:21.040Z  WARN 1 --- [vcs-backend] [io-8080-exec-10] .m.m.a.ExceptionHandlerExceptionResolver : Failure in @ExceptionHandler com.root.vcsbackend.shared.exception.GlobalExceptionHandler#handleGeneric(Exception)
+
+org.springframework.http.converter.HttpMessageNotWritableException: No converter for [class com.root.vcsbackend.model.ErrorResponse] with preset Content-Type 'text/event-stream'
+        at org.springframework.web.servlet.mvc.method.annotation.AbstractMessageConverterMethodProcessor.writeWithMessageConverters(AbstractMessageConverterMethodProcessor.java:364) ~[spring-webmvc-7.0.5.jar!/:7.0.5]
+        at org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor.handleReturnValue(HttpEntityMethodProcessor.java:261) ~[spring-webmvc-7.0.5.jar!/:7.0.5]
+        at org.springframework.web.method.support.HandlerMethodReturnValueHandlerComposite.handleReturnValue(HandlerMethodReturnValueHandlerComposite.java:78) ~[spring-web-7.0.5.jar!/:7.0.5]
+        at org.springframework.web.servlet.mvc.method.annotation.ServletInvocableHandlerMethod.invokeAndHandle(ServletInvocableHandlerMethod.java:135) ~[spring-webmvc-7.0.5.jar!/:7.0.5]

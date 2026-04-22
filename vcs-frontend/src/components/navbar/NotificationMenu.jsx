@@ -59,18 +59,26 @@ export default function NotificationMenu() {
 
   useEffect(() => {
     let mounted = true;
-    if (auth.isAuthenticated) {
+    if (!auth.isAuthenticated) return;
+
+    const fetchNotifs = () =>
       getNotifications({ unreadOnly: activeTab === 'unread' })
         .then(data => mounted && setNotifications(Array.isArray(data) ? data : []))
         .catch(e => console.error(e));
 
-      if (!esRef.current && auth.user?.access_token) {
-        esRef.current = connectNotificationsStream(auth.user.access_token, (notif) => {
-          setNotifications(prev => prev.some(p => p.id === notif.id) ? prev : [notif, ...prev]);
-        });
-      }
+    fetchNotifs();
+    const interval = setInterval(fetchNotifs, 30000);
+
+    if (!esRef.current && auth.user?.access_token) {
+      esRef.current = connectNotificationsStream((notif) => {
+        setNotifications(prev => prev.some(p => p.id === notif.id) ? prev : [notif, ...prev]);
+      });
     }
-    return () => { mounted = false; };
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
   }, [auth.isAuthenticated, auth.user?.access_token, activeTab]);
 
   const handleAction = async (notif) => {

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, Slider, ButtonGroup, Spinner, useDisclosure, addToast, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Textarea } from "@heroui/react";
+import { Button, Slider, ButtonGroup, Spinner, useDisclosure, addToast, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Textarea, Select, SelectItem, Chip } from "@heroui/react";
 import { ArrowLeft, History, Download, UploadCloud, RotateCcw, Columns, AlignLeft, Send, CheckCircle, XCircle } from 'lucide-react';
-import { useDocument } from '../hooks/useDocuments';
+import { useDocument, useUpdateDocument } from '../hooks/useDocuments';
 import { useVersions, useDiff, useRollbackVersion, useApproveVersion, useRejectVersion } from '../hooks/useVersions';
 import { formatVersionNumber } from '../api/transforms';
 import { getVersionDownloadUrl, requestReview } from '../api/versionsApi';
@@ -10,6 +10,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useOrg } from '../context/OrgContext';
 import NewVersionModal from '../components/NewVersionModal';
 import CommentsPanel from '../components/CommentsPanel';
+import { useCategories } from '../hooks/useCategories';
 
 export default function DocumentViewerView() {
   const { docId } = useParams();
@@ -27,8 +28,17 @@ export default function DocumentViewerView() {
 
   const { activeRoles } = useOrg();
   const isReviewer = activeRoles.includes('REVIEWER') || activeRoles.includes('ADMIN');
+  const canEditCategory = activeRoles.includes('ADMIN') || activeRoles.includes('AUTHOR');
 
   const { data: doc, isLoading: docLoading } = useDocument(docId);
+  const { data: categoriesData = [] } = useCategories(doc?.org_id ?? null);
+  const updateDocument = useUpdateDocument();
+
+  const [selectedCategoryKeys, setSelectedCategoryKeys] = useState(new Set([]));
+  useEffect(() => {
+    const id = doc?.category_id;
+    setSelectedCategoryKeys(typeof id === 'string' ? new Set([id]) : new Set([]));
+  }, [doc?.category_id]);
   const { data: versionsData, isLoading: versionsLoading } = useVersions(docId, { page: 0, size: 100 });
   const rollback = useRollbackVersion();
 
@@ -178,16 +188,54 @@ export default function DocumentViewerView() {
           
           {/* Prevent slider rendering if there is only 1 version */}
           {versions.length > 1 ? (
-            <Slider 
-              step={1} maxValue={versions.length - 1} minValue={0} 
-              value={effectiveIndex} onChange={setSliderIndex} 
-              color="primary" showSteps={true} 
-              marks={versions.map(v => ({ value: v.value, label: v.label }))} 
-              className="max-w-md" 
+            <Slider
+              step={1} maxValue={versions.length - 1} minValue={0}
+              value={effectiveIndex} onChange={setSliderIndex}
+              color="primary" showSteps={true}
+              marks={versions.map(v => ({ value: v.value, label: v.label }))}
+              className="max-w-md"
             />
           ) : (
             <div className="text-sm text-zinc-500 bg-zinc-800/30 border border-zinc-800 rounded-lg px-4 py-2 inline-flex w-fit font-mono">
               V1 (Initial Version)
+            </div>
+          )}
+
+          {categoriesData.length > 0 && (
+            <div className="mt-6 flex items-center gap-3">
+              <span className="text-xs text-zinc-500 shrink-0">Category</span>
+              {canEditCategory ? (
+                <Select
+                  isClearable
+                  size="sm"
+                  variant="bordered"
+                  aria-label="Document category"
+                  placeholder="None"
+                  className="max-w-[200px]"
+                  selectedKeys={selectedCategoryKeys}
+                  onSelectionChange={(keys) => {
+                    const val = Array.from(keys)[0] ?? null;
+                    setSelectedCategoryKeys(val ? new Set([val]) : new Set([]));
+                    updateDocument.mutate(
+                      { docId, data: { category_id: val } },
+                      { onSuccess: () => addToast({ title: 'Category updated', color: 'success' }) }
+                    );
+                  }}
+                  classNames={{ trigger: "border-zinc-700 bg-zinc-900/50 h-8 min-h-8", value: "text-zinc-300 text-xs" }}
+                >
+                  {categoriesData.map((c) => (
+                    <SelectItem key={c.id}>{c.name}</SelectItem>
+                  ))}
+                </Select>
+              ) : (
+                typeof doc?.category_id === 'string' ? (
+                  <Chip size="sm" variant="flat" className="bg-zinc-800 text-zinc-300 text-xs">
+                    {categoriesData.find(c => c.id === doc.category_id)?.name ?? 'Unknown'}
+                  </Chip>
+                ) : (
+                  <span className="text-xs text-zinc-600 italic">None</span>
+                )
+              )}
             </div>
           )}
         </div>
@@ -197,24 +245,23 @@ export default function DocumentViewerView() {
             <div className="text-right mr-4 hidden sm:block">
               <div className="text-sm font-bold text-white flex items-center gap-2 justify-end">
                 Viewing: {selectedVersion.label}
-                {/* Properly check the boolean is_draft flag */}
-                {selectedVersion.is_draft === true && (
+                {selectedVersion.status === 'DRAFT' && (
                   <span className="bg-default-500/20 text-default-400 text-[10px] px-2 py-0.5 rounded uppercase">Draft</span>
                 )}
-                {selectedVersion.is_draft === false && selectedVersion.status === 'PENDING' && (
+                {selectedVersion.status === 'PENDING' && (
                   <span className="bg-warning-500/20 text-warning-400 text-[10px] px-2 py-0.5 rounded uppercase">Reviewing</span>
                 )}
               </div>
             </div>
           )}
           
-          {selectedVersion?.is_draft === true && (
+          {selectedVersion?.status === 'DRAFT' && (
             <Button color="secondary" startContent={<Send size={16} />} onPress={() => reviewMutation.mutate()} isLoading={reviewMutation.isPending}>
               Request Review
             </Button>
           )}
 
-          {selectedVersion?.is_draft === false && selectedVersion?.status === 'PENDING' && isReviewer && (
+          {selectedVersion?.status === 'PENDING' && isReviewer && (
             <>
               <Button color="success" variant="flat" startContent={<CheckCircle size={16} />} onPress={handleApprove} isLoading={approveVersion.isPending}>
                 Approve
