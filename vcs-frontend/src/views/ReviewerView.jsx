@@ -33,8 +33,13 @@ export default function ReviewerView() {
     setRejectTarget(null);
   };
 
+  // Navigates directly to the document for review
   const handleViewDocument = (req) => {
-    navigate(`/documents/${req.doc_id}`);
+    if (req.org_id && req.doc_id) {
+      navigate(`/organizations/${req.org_id}/documents/${req.doc_id}`);
+    } else {
+      navigate(`/documents/${req.doc_id}`);
+    }
   };
 
   // Map API shape → ApprovalCard expected shape

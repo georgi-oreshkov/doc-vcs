@@ -10,9 +10,11 @@ import com.root.vcsbackend.request.domain.ForkRequestEntity.RequestStatus;
 import com.root.vcsbackend.request.mapper.RequestMapper;
 import com.root.vcsbackend.request.persistence.ForkRequestRepository;
 import com.root.vcsbackend.shared.exception.AppException;
+import com.root.vcsbackend.version.api.ReviewRequestedEvent;
 import com.root.vcsbackend.version.api.VersionFacade;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -34,9 +36,19 @@ public class RequestService {
     private final OrganizationFacade organizationFacade;
     private final RequestMapper requestMapper;
 
+    // 1. LISTEN TO REVIEW REQUESTS AND CREATE A CARD IN THE APPROVALS TAB
+    @EventListener
+    public void onReviewRequested(ReviewRequestedEvent event) {
+        ForkRequestEntity req = new ForkRequestEntity();
+        req.setDocId(event.docId());
+        req.setVersionId(event.versionId());
+        req.setRequesterId(event.requesterId());
+        req.setStatus(RequestStatus.PENDING);
+        forkRequestRepository.save(req);
+    }
+
     @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#req.docId, authentication)")
     public ForkRequestEntity createForkRequest(CreateForkRequestRequest req, UUID requesterId) {
-        // Validate doc and version exist and version belongs to the doc
         documentFacade.requireExists(req.getDocId());
         if (!versionFacade.existsByDocId(req.getVersionId(), req.getDocId())) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Version does not belong to the document");
@@ -44,23 +56,14 @@ public class RequestService {
         ForkRequestEntity entity = requestMapper.toEntity(req, requesterId);
         entity = forkRequestRepository.save(entity);
 
-        // Notify org admins (we notify the doc author here as a proxy for the org)
         UUID authorId = documentFacade.getAuthorId(req.getDocId());
-        
-        // ДОБАВЕНО: Изпращане на documentId и organizationId
         UUID orgId = documentFacade.resolveOrgId(req.getDocId());
         events.publishEvent(new NotificationEvent(this, authorId, "FORK_REQUEST_CREATED",
-            Map.of(
-                "documentId", req.getDocId(),
-                "organizationId", orgId,
-                "requestId", entity.getId(),
-                "message", "A new fork request was created."
-            )));
-
+            Map.of("documentId", req.getDocId(), "organizationId", orgId, "requestId", entity.getId(), "message", "A new fork request was created.")));
         return entity;
     }
 
-    // org-level role check (ADMIN / AUTHOR) is done after resolving the request entity
+    // 2. APPROVING THE REQUEST ALSO APPROVES THE VERSION
     @PreAuthorize("isAuthenticated()")
     public void actionRequest(UUID requestId, ActionRequestRequest req, UUID callerId) {
         ForkRequestEntity request = resolve(requestId);
@@ -69,51 +72,50 @@ public class RequestService {
         }
 
         UUID orgId = documentFacade.resolveOrgId(request.getDocId());
-        if (!organizationFacade.hasRole(orgId, callerId, "ADMIN", "AUTHOR")) {
-            throw new AppException(HttpStatus.FORBIDDEN, "Only ADMIN or AUTHOR can action requests");
+        if (!organizationFacade.hasRole(orgId, callerId, "ADMIN", "AUTHOR", "REVIEWER")) {
+            throw new AppException(HttpStatus.FORBIDDEN, "Not authorized to action requests");
         }
 
-        RequestStatus newStatus = Boolean.TRUE.equals(req.getApprove())
-            ? RequestStatus.APPROVED : RequestStatus.REJECTED;
+        RequestStatus newStatus = Boolean.TRUE.equals(req.getApprove()) ? RequestStatus.APPROVED : RequestStatus.REJECTED;
         request.setStatus(newStatus);
         forkRequestRepository.save(request);
 
-        String eventType = newStatus == RequestStatus.APPROVED
-            ? "FORK_REQUEST_APPROVED" : "FORK_REQUEST_REJECTED";
-            
-        // ДОБАВЕНО: Изпращане на documentId и organizationId
+        // This physically approves or rejects the file version!
+        if (newStatus == RequestStatus.APPROVED) {
+            versionFacade.approveVersion(request.getDocId(), request.getVersionId(), callerId);
+        } else {
+            versionFacade.rejectVersion(request.getDocId(), request.getVersionId(), callerId, "Rejected via approval tab");
+        }
+
+        String eventType = newStatus == RequestStatus.APPROVED ? "FORK_REQUEST_APPROVED" : "FORK_REQUEST_REJECTED";
         events.publishEvent(new NotificationEvent(this, request.getRequesterId(), eventType,
-            Map.of(
-                "documentId", request.getDocId(),
-                "organizationId", orgId,
-                "requestId", requestId,
-                "message", "Your fork request was actioned."
-            )));
+            Map.of("documentId", request.getDocId(), "organizationId", orgId, "requestId", requestId, "message", "Your review request was actioned.")));
     }
 
     @PreAuthorize("isAuthenticated()")
     public void cancelRequest(UUID requestId, UUID callerId) {
         ForkRequestEntity request = resolve(requestId);
-        if (!request.getRequesterId().equals(callerId)) {
-            throw new AppException(HttpStatus.FORBIDDEN, "You can only cancel your own requests");
-        }
-        if (request.getStatus() != RequestStatus.PENDING) {
-            throw new AppException(HttpStatus.CONFLICT, "Only PENDING requests can be cancelled");
-        }
+        if (!request.getRequesterId().equals(callerId)) throw new AppException(HttpStatus.FORBIDDEN, "You can only cancel your own requests");
+        if (request.getStatus() != RequestStatus.PENDING) throw new AppException(HttpStatus.CONFLICT, "Only PENDING requests can be cancelled");
         request.setStatus(RequestStatus.CANCELLED);
         forkRequestRepository.save(request);
     }
 
+    // 3. SHOW REVIEWERS THEIR TEAM'S REQUESTS
     @PreAuthorize("isAuthenticated()")
     @Transactional(readOnly = true)
     public List<ForkRequestEntity> listRequests(UUID callerId, String typeFilter, String statusFilter) {
-        // Only "fork" type exists; any other type yields an empty result.
-        if (typeFilter != null && !typeFilter.isBlank()
-                && !"fork".equalsIgnoreCase(typeFilter.strip())) {
-            return List.of();
-        }
-
-        List<ForkRequestEntity> all = forkRequestRepository.findByRequesterId(callerId);
+        List<ForkRequestEntity> all = forkRequestRepository.findAll().stream()
+            .filter(r -> {
+                // Return if the user created it, OR if the user is an admin/reviewer in the doc's org
+                if (r.getRequesterId().equals(callerId)) return true;
+                try {
+                    UUID orgId = documentFacade.resolveOrgId(r.getDocId());
+                    return organizationFacade.hasRole(orgId, callerId, "ADMIN", "REVIEWER");
+                } catch (Exception e) {
+                    return false;
+                }
+            }).toList();
 
         if (statusFilter != null && !statusFilter.isBlank()) {
             try {
@@ -127,7 +129,6 @@ public class RequestService {
     }
 
     private ForkRequestEntity resolve(UUID requestId) {
-        return forkRequestRepository.findById(requestId)
-            .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Request not found: " + requestId));
+        return forkRequestRepository.findById(requestId).orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Request not found: " + requestId));
     }
 }

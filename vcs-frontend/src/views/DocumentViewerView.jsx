@@ -1,16 +1,18 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, Slider, ButtonGroup, Spinner, useDisclosure, addToast } from "@heroui/react";
-import { ArrowLeft, History, Download, UploadCloud, RotateCcw, Columns, AlignLeft } from 'lucide-react';
+import { ArrowLeft, History, Download, UploadCloud, RotateCcw, Columns, AlignLeft, Send } from 'lucide-react';
 import { useDocument } from '../hooks/useDocuments';
 import { useVersions, useDiff, useRollbackVersion } from '../hooks/useVersions';
 import { formatVersionNumber } from '../api/transforms';
-import { getVersionDownloadUrl } from '../api/versionsApi';
+import { getVersionDownloadUrl, requestReview } from '../api/versionsApi';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import NewVersionModal from '../components/NewVersionModal';
 
 export default function DocumentViewerView() {
   const { docId } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [diffMode, setDiffMode] = useState('split');
   const [renderedDiff, setRenderedDiff] = useState(null);
   const [diffRendering, setDiffRendering] = useState(false);
@@ -39,21 +41,27 @@ export default function DocumentViewerView() {
   const prevVersion = effectiveIndex > 0 ? versions[effectiveIndex - 1] : null;
   const isLatest = effectiveIndex === versions.length - 1;
 
-  const { data: diffData, isLoading: diffLoading } = useDiff(
-    docId,
-    prevVersion?.id,
-    selectedVersion?.id
-  );
+  // NEW: Request Review Mutation
+  const reviewMutation = useMutation({
+    mutationFn: () => requestReview(docId, selectedVersion.id),
+    onSuccess: () => {
+      addToast({ title: 'Review Requested', description: 'Reviewers have been notified.', color: 'success' });
+      queryClient.invalidateQueries(['versions', docId]);
+      queryClient.invalidateQueries(['document', docId]);
+    },
+    onError: (err) => {
+      addToast({ title: 'Failed to request review', description: err?.message, color: 'danger' });
+    }
+  });
 
-  // Render the diff: parse the JSON payload from the server, fetch both document
-  // versions as text, then compute and display the unified diff via WASM.
+  const { data: diffData, isLoading: diffLoading } = useDiff(docId, prevVersion?.id, selectedVersion?.id);
+
   useEffect(() => {
     if (!diffData?.diff) {
       setRenderedDiff(null);
       setDiffRendering(false);
       return;
     }
-
     let cancelled = false;
     setDiffRendering(true);
     setRenderedDiff(null);
@@ -61,105 +69,74 @@ export default function DocumentViewerView() {
     (async () => {
       try {
         const payload = JSON.parse(diffData.diff);
-        const { fromUrl, toUrl } = payload;
-
-        const [fromResp, toResp] = await Promise.all([fetch(fromUrl), fetch(toUrl)]);
+        const [fromResp, toResp] = await Promise.all([fetch(payload.fromUrl), fetch(payload.toUrl)]);
         if (cancelled) return;
         const [fromText, toText] = await Promise.all([fromResp.text(), toResp.text()]);
         if (cancelled) return;
 
-        // Lazy-load WASM
         const wasmMod = await import('../../pkg/diff_wasm.js');
         if (cancelled) return;
         await wasmMod.default();
         const diff = wasmMod.generate_unified_diff_wasm(fromText, toText);
         if (!cancelled) setRenderedDiff(diff);
       } catch (err) {
-        if (!cancelled) {
-          console.error('[DocumentViewer] diff rendering failed:', err);
-          setRenderedDiff(null);
-        }
+        if (!cancelled) { console.error(err); setRenderedDiff(null); }
       } finally {
         if (!cancelled) setDiffRendering(false);
       }
     })();
-
     return () => { cancelled = true; };
   }, [diffData]);
 
-  // When viewing v1 (no previous version), fetch the document content and show
-  // the first ~15 lines as a preview since there is no diff to display.
   const isV1 = effectiveIndex === 0 && versions.length > 0;
-  const selectedVersionId = selectedVersion?.id;
-
+  
   useEffect(() => {
-    if (!isV1 || !selectedVersionId || !docId) {
+    if (!isV1 || !selectedVersion?.id || !docId) {
       setV1Preview(null);
       setV1PreviewLoading(false);
       return;
     }
-
     let cancelled = false;
     setV1PreviewLoading(true);
     setV1Preview(null);
 
     (async () => {
       try {
-        const { download_url } = await getVersionDownloadUrl(docId, selectedVersionId);
-        const urlStr = String(download_url ?? '');
-        if (!urlStr || cancelled) return;
-        const resp = await fetch(urlStr);
+        const { download_url } = await getVersionDownloadUrl(docId, selectedVersion.id);
+        if (!download_url || cancelled) return;
+        const resp = await fetch(download_url);
         if (cancelled) return;
         const text = await resp.text();
         if (!cancelled) setV1Preview(text.split('\n').slice(0, 15).join('\n'));
       } catch (err) {
-        console.error('[DocumentViewer] v1 preview failed:', err);
+        console.error(err);
       } finally {
         if (!cancelled) setV1PreviewLoading(false);
       }
     })();
-
     return () => { cancelled = true; };
-  }, [isV1, selectedVersionId, docId]);
+  }, [isV1, selectedVersion?.id, docId]);
 
   const handleDownload = async () => {
     if (!selectedVersion) return;
     try {
       const { download_url } = await getVersionDownloadUrl(docId, selectedVersion.id);
-      const urlStr = String(download_url ?? '');
-      if (!urlStr) {
-        addToast({
-          title: 'Document being prepared',
-          description: "The document is being reconstructed — you'll receive a notification when it's ready.",
-          color: 'primary',
-        });
+      if (!download_url) {
+        addToast({ title: 'Preparing', description: "Document being prepared.", color: 'primary' });
         return;
       }
-      window.open(urlStr, '_blank');
+      window.open(download_url, '_blank');
     } catch (err) {
       addToast({ title: 'Download failed', description: err?.message, color: 'danger' });
     }
   };
 
-  const handleRollback = () => {
-    if (!selectedVersion) return;
-    rollback.mutate({ docId, versionId: selectedVersion.id });
-  };
-
-  if (docLoading || versionsLoading) {
-    return (
-      <div className="flex justify-center items-center py-40">
-        <Spinner color="primary" size="lg" />
-      </div>
-    );
-  }
+  if (docLoading || versionsLoading) return <div className="flex justify-center py-40"><Spinner color="primary" size="lg" /></div>;
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-8 w-full z-10 flex-grow flex flex-col relative h-[calc(100vh-80px)]">
       <div className="flex items-center gap-2 text-sm text-zinc-500 mb-6 border-b border-zinc-800 pb-4">
-        <button onClick={() => navigate(-1)} className="flex items-center gap-1 hover:text-white transition">
-          <ArrowLeft size={16} /> Back
-        </button>
+        <button onClick={() => navigate(-1)} className="flex items-center gap-1 hover:text-white transition"><ArrowLeft size={16} /> Back</button>
         <span>/</span>
         <span className="text-zinc-300 font-semibold">{doc?.name || "Document"}</span>
       </div>
@@ -170,43 +147,39 @@ export default function DocumentViewerView() {
             <History size={16} className="text-lime-500" />
             <span className="text-sm font-semibold text-white">Version Timeline</span>
           </div>
-          
           {versions.length > 0 && (
-            <Slider 
-              step={1} maxValue={versions.length - 1} minValue={0} 
-              value={effectiveIndex} onChange={setSliderIndex}
-              color="primary" showSteps={true}
-              marks={versions.map(v => ({ value: v.value, label: v.label }))}
-              className="max-w-md"
-            />
+            <Slider step={1} maxValue={versions.length - 1} minValue={0} value={effectiveIndex} onChange={setSliderIndex} color="primary" showSteps={true} marks={versions.map(v => ({ value: v.value, label: v.label }))} className="max-w-md" />
           )}
         </div>
 
         <div className="w-full lg:w-auto flex flex-wrap gap-3 justify-end items-center mt-4 lg:mt-0">
           {selectedVersion && (
             <div className="text-right mr-4 hidden sm:block">
-              <div className="text-sm font-bold text-white">Viewing: {selectedVersion.label}</div>
-              <div className="text-xs text-zinc-500 truncate max-w-[200px]">{selectedVersion.msg}</div>
+              <div className="text-sm font-bold text-white flex items-center gap-2 justify-end">
+                Viewing: {selectedVersion.label}
+                {selectedVersion.status === 'DRAFT' && <span className="bg-default-500/20 text-default-400 text-[10px] px-2 py-0.5 rounded uppercase">Draft</span>}
+                {selectedVersion.status === 'PENDING' && <span className="bg-warning-500/20 text-warning-400 text-[10px] px-2 py-0.5 rounded uppercase">Reviewing</span>}
+              </div>
             </div>
           )}
           
-          <Button variant="bordered" className="border-zinc-700 text-zinc-300" startContent={<Download size={18} />} onPress={handleDownload}>
-            Download
-          </Button>
+          {/* THE NEW BUTTON */}
+          {selectedVersion?.status === 'DRAFT' && (
+            <Button color="secondary" startContent={<Send size={16} />} onPress={() => reviewMutation.mutate()} isLoading={reviewMutation.isPending}>
+              Request Review
+            </Button>
+          )}
+
+          <Button variant="bordered" className="border-zinc-700 text-zinc-300" startContent={<Download size={18} />} onPress={handleDownload}>Download</Button>
 
           {isLatest ? (
-            <Button color="primary" startContent={<UploadCloud size={18} />} onPress={onNewVersionOpen}>
-              New Version
-            </Button>
+            <Button color="primary" startContent={<UploadCloud size={18} />} onPress={onNewVersionOpen}>New Version</Button>
           ) : (
-            <Button color="warning" variant="flat" startContent={<RotateCcw size={18} />} onPress={handleRollback} isLoading={rollback.isPending}>
-              Rollback to {selectedVersion?.label}
-            </Button>
+            <Button color="warning" variant="flat" startContent={<RotateCcw size={18} />} onPress={() => rollback.mutate({ docId, versionId: selectedVersion.id })} isLoading={rollback.isPending}>Rollback</Button>
           )}
         </div>
       </div>
 
-      {/* Diff Viewer Area */}
       <div className="flex-grow bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden flex flex-col relative">
         <div className="bg-zinc-900 border-b border-zinc-800 p-3 flex justify-between items-center">
           <div className="text-sm font-medium flex items-center gap-2">
@@ -214,7 +187,6 @@ export default function DocumentViewerView() {
             <span className="text-zinc-500">&rarr;</span>
             <span className="bg-lime-500/20 border border-lime-500/30 px-2 py-0.5 rounded text-xs font-mono text-lime-400 font-bold">{selectedVersion?.label || '—'}</span>
           </div>
-          
           <ButtonGroup size="sm">
             <Button variant={diffMode === 'split' ? "solid" : "bordered"} color={diffMode === 'split' ? "default" : "default"} onPress={() => setDiffMode('split')} startContent={<Columns size={14} />} className={diffMode === 'split' ? "bg-zinc-700" : "border-zinc-700 text-zinc-400"}>Split</Button>
             <Button variant={diffMode === 'unified' ? "solid" : "bordered"} color={diffMode === 'unified' ? "default" : "default"} onPress={() => setDiffMode('unified')} startContent={<AlignLeft size={14} />} className={diffMode === 'unified' ? "bg-zinc-700" : "border-zinc-700 text-zinc-400"}>Unified</Button>
@@ -225,32 +197,18 @@ export default function DocumentViewerView() {
           {diffLoading || diffRendering || v1PreviewLoading ? (
             <div className="flex justify-center items-center h-full"><Spinner color="primary" /></div>
           ) : renderedDiff ? (
-            diffMode === 'split' ? (
-              <SplitDiffView diff={renderedDiff} />
-            ) : (
-              <UnifiedDiffView diff={renderedDiff} />
-            )
+            diffMode === 'split' ? <SplitDiffView diff={renderedDiff} /> : <UnifiedDiffView diff={renderedDiff} />
           ) : v1Preview !== null ? (
             <V1PreviewView content={v1Preview} />
           ) : (
-            <div className="flex items-center justify-center h-full text-zinc-600 p-8">
-              {versions.length === 0 ? 'No versions available.' : 'Select a version to see the diff.'}
-            </div>
+            <div className="flex items-center justify-center h-full text-zinc-600 p-8">Select a version to see the diff.</div>
           )}
         </div>
       </div>
-
-      <NewVersionModal
-        isOpen={isNewVersionOpen}
-        onOpenChange={onNewVersionOpenChange}
-        docId={docId}
-        versions={versionsData?.content || versionsData || []}
-      />
+      <NewVersionModal isOpen={isNewVersionOpen} onOpenChange={onNewVersionOpenChange} docId={docId} versions={versionsData?.content || versionsData || []} />
     </div>
   );
 }
-
-// ─── Diff Rendering Components ────────────────────────────────────────────────
 
 function lineClass(line) {
   if (line.startsWith('+')) return 'text-emerald-400 bg-emerald-950/40';
@@ -277,41 +235,22 @@ function UnifiedDiffView({ diff }) {
 
 function SplitDiffView({ diff }) {
   const lines = diff.split('\n');
-  const leftLines = [];
-  const rightLines = [];
-
+  const leftLines = [], rightLines = [];
   for (const line of lines) {
-    if (line.startsWith('-')) {
-      leftLines.push(line);
-      rightLines.push(null);
-    } else if (line.startsWith('+')) {
-      leftLines.push(null);
-      rightLines.push(line);
-    } else {
-      leftLines.push(line);
-      rightLines.push(line);
-    }
+    if (line.startsWith('-')) { leftLines.push(line); rightLines.push(null); }
+    else if (line.startsWith('+')) { leftLines.push(null); rightLines.push(line); }
+    else { leftLines.push(line); rightLines.push(line); }
   }
-
   const maxLen = Math.max(leftLines.length, rightLines.length);
-
   return (
     <table className="w-full table-fixed border-collapse text-xs">
       <tbody>
-        {Array.from({ length: maxLen }, (_, i) => {
-          const left = leftLines[i] ?? '';
-          const right = rightLines[i] ?? '';
-          return (
-            <tr key={i}>
-              <td className={`px-4 py-0.5 whitespace-pre-wrap break-all w-1/2 border-r border-zinc-800 ${left ? lineClass(left) : 'text-zinc-700'}`}>
-                {left || ' '}
-              </td>
-              <td className={`px-4 py-0.5 whitespace-pre-wrap break-all w-1/2 ${right ? lineClass(right) : 'text-zinc-700'}`}>
-                {right || ' '}
-              </td>
-            </tr>
-          );
-        })}
+        {Array.from({ length: maxLen }, (_, i) => (
+          <tr key={i}>
+            <td className={`px-4 py-0.5 whitespace-pre-wrap break-all w-1/2 border-r border-zinc-800 ${leftLines[i] ? lineClass(leftLines[i]) : 'text-zinc-700'}`}>{leftLines[i] || ' '}</td>
+            <td className={`px-4 py-0.5 whitespace-pre-wrap break-all w-1/2 ${rightLines[i] ? lineClass(rightLines[i]) : 'text-zinc-700'}`}>{rightLines[i] || ' '}</td>
+          </tr>
+        ))}
       </tbody>
     </table>
   );
