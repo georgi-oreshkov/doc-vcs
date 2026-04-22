@@ -128,15 +128,18 @@
           "name": {
             "type": "string"
           },
-          "my_role": {
-            "type": "string",
-            "enum": [
-              "ADMIN",
-              "AUTHOR",
-              "REVIEWER",
-              "READER"
-            ],
-            "description": "The current user's role in this organization. Only present when listing the user's own organizations."
+          "my_roles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "ADMIN",
+                "AUTHOR",
+                "REVIEWER",
+                "READER"
+              ]
+            },
+            "description": "The current user's roles in this organization. Only present when listing the user's own organizations."
           }
         }
       },
@@ -155,21 +158,24 @@
         "type": "object",
         "required": [
           "user_id",
-          "role"
+          "roles"
         ],
         "properties": {
           "user_id": {
             "type": "string",
             "format": "uuid"
           },
-          "role": {
-            "type": "string",
-            "enum": [
-              "ADMIN",
-              "AUTHOR",
-              "REVIEWER",
-              "READER"
-            ]
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "ADMIN",
+                "AUTHOR",
+                "REVIEWER",
+                "READER"
+              ]
+            }
           },
           "name": {
             "type": "string",
@@ -366,6 +372,31 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "author_name": {
+            "type": "string",
+            "description": "Display name of the comment author."
+          }
+        }
+      },
+      "UserSearchResult": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "email"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
           }
         }
       },
@@ -561,6 +592,44 @@
         "responses": {
           "302": {
             "description": "Redirect to identity provider"
+          }
+        }
+      }
+    },
+    "/users/search": {
+      "get": {
+        "operationId": "searchUsers",
+        "summary": "Search users by name or email",
+        "tags": [
+          "User"
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search query (name or email)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of matching users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserSearchResult"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }

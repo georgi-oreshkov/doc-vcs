@@ -8,6 +8,7 @@ import { formatVersionNumber } from '../api/transforms';
 import { getVersionDownloadUrl, requestReview } from '../api/versionsApi';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import NewVersionModal from '../components/NewVersionModal';
+import CommentsPanel from '../components/CommentsPanel';
 
 export default function DocumentViewerView() {
   const { docId } = useParams();
@@ -206,6 +207,10 @@ export default function DocumentViewerView() {
         </div>
       </div>
       <NewVersionModal isOpen={isNewVersionOpen} onOpenChange={onNewVersionOpenChange} docId={docId} versions={versionsData?.content || versionsData || []} />
+
+      {selectedVersion && (
+        <CommentsPanel docId={docId} versionId={selectedVersion.id} />
+      )}
     </div>
   );
 }

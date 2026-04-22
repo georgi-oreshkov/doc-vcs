@@ -22,6 +22,9 @@ export const approveVersion = (docId, versionId) =>
 export const rejectVersion = (docId, versionId, data = {}) =>
   api.post(`/documents/${docId}/versions/${versionId}/reject`, data).then((r) => r.data);
 
+export const requestReview = (docId, versionId) =>
+  api.post(`/documents/${docId}/versions/${versionId}/request-review`).then((r) => r.data);
+
 export const getPendingReviewVersions = () =>
   api.get('/versions/pending-review').then((r) => r.data);
 

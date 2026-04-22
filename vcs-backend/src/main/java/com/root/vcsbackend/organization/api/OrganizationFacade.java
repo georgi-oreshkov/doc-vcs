@@ -1,14 +1,14 @@
 package com.root.vcsbackend.organization.api;
 
-import com.root.vcsbackend.organization.domain.OrgMembershipEntity;
 import com.root.vcsbackend.organization.domain.OrgMembershipEntity.OrgRole;
+import com.root.vcsbackend.organization.domain.OrgUserRoleEntity;
 import com.root.vcsbackend.organization.persistence.OrgMembershipRepository;
+import com.root.vcsbackend.organization.persistence.OrgUserRoleRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -19,10 +19,11 @@ import java.util.UUID;
 public class OrganizationFacade {
 
     private final OrgMembershipRepository orgMembershipRepository;
+    private final OrgUserRoleRepository orgUserRoleRepository;
 
-    public Optional<OrgRole> resolveRole(UUID orgId, UUID userId) {
-        return orgMembershipRepository.findByOrgIdAndUserId(orgId, userId)
-            .map(OrgMembershipEntity::getRole);
+    public List<String> resolveRoles(UUID orgId, UUID userId) {
+        return orgUserRoleRepository.findByOrgIdAndUserId(orgId, userId)
+            .stream().map(r -> r.getRole().name()).toList();
     }
 
     public boolean isMember(UUID orgId, UUID userId) {
@@ -30,22 +31,22 @@ public class OrganizationFacade {
     }
 
     /**
-     * Returns true if the user holds one of the given role names in the org.
-     * Used by other modules (e.g. request) for permission checks without importing OrgRole.
+     * Returns true if the user holds any of the given role names in the org.
      */
     public boolean hasRole(UUID orgId, UUID userId, String... roleNames) {
-        return orgMembershipRepository.findByOrgIdAndUserId(orgId, userId)
-            .map(m -> Arrays.asList(roleNames).contains(m.getRole().name()))
-            .orElse(false);
+        List<String> userRoles = resolveRoles(orgId, userId);
+        List<String> required = Arrays.asList(roleNames);
+        return userRoles.stream().anyMatch(required::contains);
     }
 
     /**
      * Fetches the User IDs of all members with ADMIN or REVIEWER roles in the organization.
      */
     public List<UUID> getReviewersAndAdmins(UUID orgId) {
-        return orgMembershipRepository.findByOrgIdAndRoleIn(orgId, Arrays.asList(OrgRole.ADMIN, OrgRole.REVIEWER))
+        return orgUserRoleRepository.findByOrgIdAndRoleIn(orgId, Arrays.asList(OrgRole.ADMIN, OrgRole.REVIEWER))
             .stream()
-            .map(OrgMembershipEntity::getUserId)
+            .map(OrgUserRoleEntity::getUserId)
+            .distinct()
             .toList();
     }
 }

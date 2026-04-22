@@ -6,6 +6,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 
 @Component("orgRoleEvaluator")
@@ -21,9 +22,9 @@ public class OrgRoleEvaluator {
     public boolean hasRole(UUID orgId, Authentication auth, String... roles) {
         UUID userId = extractUserId(auth);
         if (userId == null) return false;
-        return orgRoleLookup.findRole(orgId, userId)
-            .map(role -> Arrays.asList(roles).contains(role))
-            .orElse(false);
+        List<String> userRoles = orgRoleLookup.findRoles(orgId, userId);
+        List<String> required = Arrays.asList(roles);
+        return userRoles.stream().anyMatch(required::contains);
     }
 
     /**
@@ -34,8 +35,8 @@ public class OrgRoleEvaluator {
         UUID userId = extractUserId(auth);
         if (userId == null) return false;
         return documentOrgLookup.findOrgId(docId)
-            .flatMap(orgId -> orgRoleLookup.findRole(orgId, userId))
-            .isPresent();
+            .map(orgId -> !orgRoleLookup.findRoles(orgId, userId).isEmpty())
+            .orElse(false);
     }
 
     private UUID extractUserId(Authentication auth) {

@@ -1,7 +1,0 @@
-- enable word wrap in version diff preview
-- the admin panel doesnt reflect the way users and roles in orgs are set up internally. as is a user can be any number of roles, as they dont overlap much. the default role should be reader for all
-- the display for the id below and the number (dont know if its size) next to it is ugly. also seems to be showing the same uuid.
-- the filter by author doesnt work, even viewing my own docs.
-- scrolling up and down too far reveals white bands
-- there is no option to delete a document? it should probably be a request sent to a reviewer. Thats the way it was set up on the api i think.
-- there is no option to asign reviewers anywhere.

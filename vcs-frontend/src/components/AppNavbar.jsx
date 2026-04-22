@@ -19,23 +19,23 @@ export default function AppNavbar() {
   const auth = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { selectedOrg, activeRole } = useOrg();
+  const { selectedOrg, activeRole, activeRoles } = useOrg();
 
   const navItems = useMemo(() => {
     let items = [...BASE_NAV_ITEMS];
     
-    // Add Approvals tab if user is ADMIN or REVIEWER
-    if (activeRole === 'ADMIN' || activeRole === 'REVIEWER') {
+    // Add Approvals tab if user is ADMIN or REVIEWER (check all roles)
+    if (activeRoles.includes('ADMIN') || activeRoles.includes('REVIEWER')) {
       items.push({ label: "Approvals", path: "/reviews" });
     }
     
     // Add Admin tab if user is ADMIN
-    if (selectedOrg && activeRole === 'ADMIN') {
+    if (selectedOrg && activeRoles.includes('ADMIN')) {
       items.push({ label: "Admin", path: `/organizations/${selectedOrg.id}/admin` });
     }
     
     return items;
-  }, [selectedOrg, activeRole]);
+  }, [selectedOrg, activeRoles]);
 
   // Function to determine if a nav item should be active
   const isNavItemActive = (item) => {

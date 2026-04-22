@@ -5,3 +5,6 @@ export const getUserProfile = () =>
 
 export const updateUserProfile = (data) =>
   api.patch('/user/profile', data).then((r) => r.data);
+
+export const searchUsers = (q) =>
+  api.get('/users/search', { params: { q } }).then((r) => r.data);

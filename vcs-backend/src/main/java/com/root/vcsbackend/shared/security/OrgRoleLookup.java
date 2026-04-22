@@ -1,6 +1,6 @@
 package com.root.vcsbackend.shared.security;
 
-import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -10,7 +10,7 @@ import java.util.UUID;
  */
 public interface OrgRoleLookup {
 
-    /** Returns the role name (e.g. "ADMIN") for the given user in the given org, or empty. */
-    Optional<String> findRole(UUID orgId, UUID userId);
+    /** Returns the role names (e.g. ["ADMIN", "REVIEWER"]) for the given user in the given org. Empty list means no membership. */
+    List<String> findRoles(UUID orgId, UUID userId);
 }
 

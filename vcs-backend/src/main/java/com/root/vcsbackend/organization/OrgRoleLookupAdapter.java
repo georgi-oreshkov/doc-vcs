@@ -1,11 +1,11 @@
 package com.root.vcsbackend.organization;
 
-import com.root.vcsbackend.organization.persistence.OrgMembershipRepository;
+import com.root.vcsbackend.organization.persistence.OrgUserRoleRepository;
 import com.root.vcsbackend.shared.security.OrgRoleLookup;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -16,12 +16,14 @@ import java.util.UUID;
 @RequiredArgsConstructor
 class OrgRoleLookupAdapter implements OrgRoleLookup {
 
-    private final OrgMembershipRepository membershipRepository;
+    private final OrgUserRoleRepository orgUserRoleRepository;
 
     @Override
-    public Optional<String> findRole(UUID orgId, UUID userId) {
-        return membershipRepository.findByOrgIdAndUserId(orgId, userId)
-            .map(m -> m.getRole().name());
+    public List<String> findRoles(UUID orgId, UUID userId) {
+        return orgUserRoleRepository.findByOrgIdAndUserId(orgId, userId)
+            .stream()
+            .map(r -> r.getRole().name())
+            .toList();
     }
 }
 

@@ -5,13 +5,14 @@ import com.root.vcsbackend.model.OrgUser;
 import com.root.vcsbackend.model.Organization;
 import com.root.vcsbackend.organization.domain.OrgMembershipEntity;
 import com.root.vcsbackend.organization.domain.OrgMembershipEntity.OrgRole;
+import com.root.vcsbackend.organization.domain.OrgUserRoleEntity;
 import com.root.vcsbackend.organization.domain.OrganizationEntity;
 import com.root.vcsbackend.shared.mapper.MapStructConfig;
 import com.root.vcsbackend.user.domain.UserProfileEntity;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
-import org.mapstruct.Named;
 
+import java.util.List;
 import java.util.UUID;
 
 @Mapper(componentModel = "spring", config = MapStructConfig.class)
@@ -19,9 +20,12 @@ public interface OrganizationMapper {
 
     Organization toDto(OrganizationEntity entity);
 
-    default Organization toDto(OrganizationEntity entity, OrgRole role) {
+    default Organization toDto(OrganizationEntity entity, List<OrgUserRoleEntity> roles) {
         Organization dto = toDto(entity);
-        dto.setMyRole(orgRoleToMyRole(role));
+        List<Organization.MyRolesEnum> apiRoles = roles.stream()
+            .map(r -> Organization.MyRolesEnum.fromValue(r.getRole().name()))
+            .toList();
+        dto.setMyRoles(apiRoles);
         return dto;
     }
 
@@ -31,14 +35,12 @@ public interface OrganizationMapper {
     @Mapping(target = "createdBy", ignore = true)
     OrganizationEntity toEntity(CreateOrganizationRequest req);
 
-    @Mapping(target = "userId", source = "membership.userId")
-    @Mapping(target = "role", source = "membership.role", qualifiedByName = "orgRoleToApi")
-    @Mapping(target = "name", ignore = true)
-    @Mapping(target = "email", ignore = true)
-    OrgUser toOrgUserDto(OrgMembershipEntity membership);
-
-    default OrgUser toOrgUserDto(OrgMembershipEntity membership, UserProfileEntity profile) {
-        OrgUser dto = toOrgUserDto(membership);
+    default OrgUser toOrgUserDto(OrgMembershipEntity membership, List<OrgUserRoleEntity> roles, UserProfileEntity profile) {
+        OrgUser dto = new OrgUser();
+        dto.setUserId(membership.getUserId());
+        dto.setRoles(roles.stream()
+            .map(r -> OrgUser.RolesEnum.fromValue(r.getRole().name()))
+            .toList());
         if (profile != null) {
             dto.setName(profile.getName());
             dto.setEmail(profile.getEmail());
@@ -46,23 +48,7 @@ public interface OrganizationMapper {
         return dto;
     }
 
-    @Mapping(target = "id", ignore = true)
-    @Mapping(target = "orgId", source = "orgId")
-    @Mapping(target = "userId", source = "req.userId")
-    @Mapping(target = "role", source = "req.role", qualifiedByName = "apiRoleToOrgRole")
-    OrgMembershipEntity toMembershipEntity(OrgUser req, UUID orgId);
-
-    @Named("orgRoleToApi")
-    default OrgUser.RoleEnum orgRoleToApi(OrgRole role) {
-        return OrgUser.RoleEnum.fromValue(role.name());
-    }
-
-    @Named("apiRoleToOrgRole")
-    default OrgRole apiRoleToOrgRole(OrgUser.RoleEnum roleEnum) {
+    default OrgRole apiRoleToOrgRole(OrgUser.RolesEnum roleEnum) {
         return OrgRole.valueOf(roleEnum.getValue());
-    }
-
-    default Organization.MyRoleEnum orgRoleToMyRole(OrgRole role) {
-        return Organization.MyRoleEnum.fromValue(role.name());
     }
 }

@@ -17,8 +17,8 @@ export default function AdminMembersTab({ orgId }) {
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
   const [removingId, setRemovingId] = useState(null);
 
-  const handleRoleChange = (userId, role) => {
-    addUser.mutate({ orgId, data: { user_id: userId, role } });
+  const handleRolesChange = (userId, roles) => {
+    addUser.mutate({ orgId, data: { user_id: userId, roles } });
   };
 
   const handleRemove = (userId) => {
@@ -40,11 +40,12 @@ export default function AdminMembersTab({ orgId }) {
     <div className="pt-6">
       <div className="flex justify-between items-center mb-6">
         <p className="text-zinc-400 text-sm">{users.length} member{users.length !== 1 ? 's' : ''}</p>
-        <Button 
-          className="bg-lime-600 text-black font-bold hover:bg-lime-500 disabled:bg-zinc-800 disabled:text-zinc-600 transition-colors" 
-          size="sm" 
-          startContent={<Plus size={16} />} onPress={onOpen}
-        > 
+        <Button
+          className="bg-lime-600 text-black font-bold hover:bg-lime-500 disabled:bg-zinc-800 disabled:text-zinc-600 transition-colors"
+          size="sm"
+          startContent={<Plus size={16} />}
+          onPress={onOpen}
+        >
           Add Member
         </Button>
       </div>
@@ -59,57 +60,75 @@ export default function AdminMembersTab({ orgId }) {
       >
         <TableHeader>
           <TableColumn>User</TableColumn>
-          <TableColumn>Role</TableColumn>
+          <TableColumn>Roles</TableColumn>
           <TableColumn width={100}>Actions</TableColumn>
         </TableHeader>
         <TableBody>
-          {users.map((u) => (
-            <TableRow key={u.user_id}>
-              <TableCell>
-                <User
-                  name={u.name || 'Unknown'}
-                  description={u.email || u.user_id}
-                  avatarProps={{
-                    name: (u.name || '?')[0],
-                    size: 'sm',
-                    classNames: { base: 'bg-zinc-700' },
-                  }}
-                />
-              </TableCell>
-              <TableCell>
-                <Select
-                  aria-label="Role"
-                  size="sm"
-                  variant="bordered"
-                  selectedKeys={[u.role]}
-                  onSelectionChange={(keys) => {
-                    const role = [...keys][0];
-                    if (role && role !== u.role) handleRoleChange(u.user_id, role);
-                  }}
-                  classNames={{ trigger: "min-w-[130px] border-zinc-700" }}
-                >
-                  {ROLES.map((r) => (
-                    <SelectItem key={r}>
-                      {r.charAt(0) + r.slice(1).toLowerCase()}
-                    </SelectItem>
-                  ))}
-                </Select>
-              </TableCell>
-              <TableCell>
-                <Button
-                  isIconOnly
-                  size="sm"
-                  variant="light"
-                  color="danger"
-                  isLoading={removingId === u.user_id}
-                  onPress={() => handleRemove(u.user_id)}
-                  aria-label="Remove member"
-                >
-                  <Trash2 size={16} />
-                </Button>
-              </TableCell>
-            </TableRow>
-          ))}
+          {users.map((u) => {
+            const currentRoles = Array.isArray(u.roles) ? u.roles : (u.role ? [u.role] : []);
+            return (
+              <TableRow key={u.user_id}>
+                <TableCell>
+                  <User
+                    name={u.name || 'Unknown'}
+                    description={u.email || u.user_id}
+                    avatarProps={{
+                      name: (u.name || '?')[0],
+                      size: 'sm',
+                      classNames: { base: 'bg-zinc-700' },
+                    }}
+                  />
+                </TableCell>
+                <TableCell>
+                  <Select
+                    aria-label="Roles"
+                    size="sm"
+                    variant="bordered"
+                    selectionMode="multiple"
+                    selectedKeys={new Set(currentRoles)}
+                    onSelectionChange={(keys) => {
+                      const roles = [...keys];
+                      if (roles.length > 0) handleRolesChange(u.user_id, roles);
+                    }}
+                    classNames={{ trigger: "min-w-[160px] border-zinc-700" }}
+                    renderValue={(items) => (
+                      <div className="flex flex-wrap gap-1">
+                        {items.map((item) => (
+                          <Chip
+                            key={item.key}
+                            size="sm"
+                            color={ROLE_COLORS[item.key] || 'default'}
+                            variant="flat"
+                          >
+                            {item.key.charAt(0) + item.key.slice(1).toLowerCase()}
+                          </Chip>
+                        ))}
+                      </div>
+                    )}
+                  >
+                    {ROLES.map((r) => (
+                      <SelectItem key={r}>
+                        {r.charAt(0) + r.slice(1).toLowerCase()}
+                      </SelectItem>
+                    ))}
+                  </Select>
+                </TableCell>
+                <TableCell>
+                  <Button
+                    isIconOnly
+                    size="sm"
+                    variant="light"
+                    color="danger"
+                    isLoading={removingId === u.user_id}
+                    onPress={() => handleRemove(u.user_id)}
+                    aria-label="Remove member"
+                  >
+                    <Trash2 size={16} />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
 

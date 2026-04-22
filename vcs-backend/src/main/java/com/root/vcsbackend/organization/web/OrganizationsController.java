@@ -5,6 +5,7 @@ import com.root.vcsbackend.model.CreateOrganizationRequest;
 import com.root.vcsbackend.model.OrgUser;
 import com.root.vcsbackend.model.Organization;
 import com.root.vcsbackend.organization.domain.OrgMembershipEntity;
+import com.root.vcsbackend.organization.domain.OrgUserRoleEntity;
 import com.root.vcsbackend.organization.mapper.OrganizationMapper;
 import com.root.vcsbackend.organization.service.OrganizationService;
 import com.root.vcsbackend.shared.security.SecurityHelper;
@@ -48,9 +49,13 @@ public class OrganizationsController implements OrganizationsApi {
     public ResponseEntity<List<OrgUser>> listOrgUsers(UUID orgId) {
         List<OrgMembershipEntity> memberships = organizationService.listOrgUsers(orgId);
         List<UUID> userIds = memberships.stream().map(OrgMembershipEntity::getUserId).toList();
+        Map<UUID, List<OrgUserRoleEntity>> rolesByUser = organizationService.getRolesByUsers(orgId, userIds);
         Map<UUID, UserProfileEntity> profiles = organizationService.resolveUserProfiles(userIds);
         List<OrgUser> users = memberships.stream()
-            .map(m -> organizationMapper.toOrgUserDto(m, profiles.get(m.getUserId())))
+            .map(m -> organizationMapper.toOrgUserDto(
+                m,
+                rolesByUser.getOrDefault(m.getUserId(), List.of()),
+                profiles.get(m.getUserId())))
             .toList();
         return ResponseEntity.ok(users);
     }
@@ -59,7 +64,7 @@ public class OrganizationsController implements OrganizationsApi {
     public ResponseEntity<List<Organization>> listOrganizations() {
         UUID callerId = securityHelper.currentUser().userId();
         List<Organization> orgs = organizationService.listOrganizations(callerId).stream()
-            .map(owr -> organizationMapper.toDto(owr.org(), owr.role()))
+            .map(owr -> organizationMapper.toDto(owr.org(), owr.roles()))
             .toList();
         return ResponseEntity.ok(orgs);
     }
@@ -78,7 +83,13 @@ public class OrganizationsController implements OrganizationsApi {
 
     @Override
     public ResponseEntity<OrgUser> upsertOrgUserRole(UUID orgId, OrgUser orgUser) {
-        return ResponseEntity.ok(
-            organizationMapper.toOrgUserDto(organizationService.upsertOrgUserRole(orgId, orgUser)));
+        List<OrgUserRoleEntity> savedRoles = organizationService.upsertOrgUserRoles(orgId, orgUser);
+        // Return the updated OrgUser DTO
+        UserProfileEntity profile = organizationService.resolveUserProfiles(List.of(orgUser.getUserId()))
+            .get(orgUser.getUserId());
+        OrgMembershipEntity membership = new OrgMembershipEntity();
+        membership.setUserId(orgUser.getUserId());
+        membership.setOrgId(orgId);
+        return ResponseEntity.ok(organizationMapper.toOrgUserDto(membership, savedRoles, profile));
     }
 }

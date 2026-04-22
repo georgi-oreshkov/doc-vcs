@@ -4,9 +4,11 @@ import com.root.vcsbackend.model.CreateOrganizationRequest;
 import com.root.vcsbackend.model.OrgUser;
 import com.root.vcsbackend.organization.domain.OrgMembershipEntity;
 import com.root.vcsbackend.organization.domain.OrgMembershipEntity.OrgRole;
+import com.root.vcsbackend.organization.domain.OrgUserRoleEntity;
 import com.root.vcsbackend.organization.domain.OrganizationEntity;
 import com.root.vcsbackend.organization.mapper.OrganizationMapper;
 import com.root.vcsbackend.organization.persistence.OrgMembershipRepository;
+import com.root.vcsbackend.organization.persistence.OrgUserRoleRepository;
 import com.root.vcsbackend.organization.persistence.OrganizationRepository;
 import com.root.vcsbackend.shared.exception.AppException;
 import com.root.vcsbackend.user.api.UserFacade;
@@ -30,6 +32,7 @@ public class OrganizationService {
 
     private final OrganizationRepository organizationRepository;
     private final OrgMembershipRepository orgMembershipRepository;
+    private final OrgUserRoleRepository orgUserRoleRepository;
     private final OrganizationMapper organizationMapper;
     private final UserFacade userFacade;
 
@@ -37,8 +40,10 @@ public class OrganizationService {
         OrganizationEntity org = organizationMapper.toEntity(req);
         org = organizationRepository.save(org);
         // Creator automatically becomes ADMIN
-        orgMembershipRepository.save(OrgMembershipEntity.builder()
-            .orgId(org.getId()).userId(callerId).role(OrgRole.ADMIN).build());
+        OrgMembershipEntity membership = orgMembershipRepository.save(
+            OrgMembershipEntity.builder().orgId(org.getId()).userId(callerId).build());
+        orgUserRoleRepository.save(
+            OrgUserRoleEntity.builder().orgId(org.getId()).userId(callerId).role(OrgRole.ADMIN).build());
         return org;
     }
 
@@ -62,20 +67,21 @@ public class OrganizationService {
 
     @Transactional(readOnly = true)
     @PreAuthorize("isAuthenticated()")
-    public List<OrganizationService.OrgWithRole> listOrganizations(UUID userId) {
+    public List<OrgWithRoles> listOrganizations(UUID userId) {
         List<OrgMembershipEntity> memberships = orgMembershipRepository.findByUserId(userId);
         if (memberships.isEmpty()) {
             return List.of();
         }
-        Map<UUID, OrgMembershipEntity> membershipByOrgId = memberships.stream()
-            .collect(Collectors.toMap(OrgMembershipEntity::getOrgId, Function.identity()));
-        List<OrganizationEntity> orgs = organizationRepository.findAllById(membershipByOrgId.keySet());
+        List<UUID> orgIds = memberships.stream().map(OrgMembershipEntity::getOrgId).toList();
+        List<OrganizationEntity> orgs = organizationRepository.findAllById(orgIds);
+        // Collect roles per org for this user
         return orgs.stream()
-            .map(org -> new OrgWithRole(org, membershipByOrgId.get(org.getId()).getRole()))
+            .map(org -> new OrgWithRoles(org,
+                orgUserRoleRepository.findByOrgIdAndUserId(org.getId(), userId)))
             .toList();
     }
 
-    public record OrgWithRole(OrganizationEntity org, OrgRole role) {}
+    public record OrgWithRoles(OrganizationEntity org, List<OrgUserRoleEntity> roles) {}
 
     @Transactional(readOnly = true)
     @PreAuthorize("@orgRoleEvaluator.hasRole(#orgId, authentication, 'ADMIN', 'AUTHOR', 'REVIEWER', 'READER')")
@@ -85,18 +91,40 @@ public class OrganizationService {
     }
 
     @Transactional(readOnly = true)
+    public Map<UUID, List<OrgUserRoleEntity>> getRolesByUsers(UUID orgId, List<UUID> userIds) {
+        return orgUserRoleRepository.findByOrgId(orgId).stream()
+            .filter(r -> userIds.contains(r.getUserId()))
+            .collect(Collectors.groupingBy(OrgUserRoleEntity::getUserId));
+    }
+
+    @Transactional(readOnly = true)
     public Map<UUID, UserProfileEntity> resolveUserProfiles(List<UUID> userIds) {
         return userFacade.resolveUsers(userIds);
     }
 
+    /**
+     * Add or replace a member's roles in the org (replaces all existing roles for that user).
+     */
     @PreAuthorize("@orgRoleEvaluator.hasRole(#orgId, authentication, 'ADMIN')")
-    public OrgMembershipEntity upsertOrgUserRole(UUID orgId, OrgUser req) {
+    public List<OrgUserRoleEntity> upsertOrgUserRoles(UUID orgId, OrgUser req) {
         resolve(orgId);
-        OrgMembershipEntity membership = orgMembershipRepository
-            .findByOrgIdAndUserId(orgId, req.getUserId())
-            .orElse(OrgMembershipEntity.builder().orgId(orgId).userId(req.getUserId()).build());
-        membership.setRole(OrgRole.valueOf(req.getRole().getValue()));
-        return orgMembershipRepository.save(membership);
+        UUID userId = req.getUserId();
+        // Ensure membership exists
+        if (!orgMembershipRepository.existsByOrgIdAndUserId(orgId, userId)) {
+            orgMembershipRepository.save(
+                OrgMembershipEntity.builder().orgId(orgId).userId(userId).build());
+        }
+        // Replace all roles
+        orgUserRoleRepository.deleteByOrgIdAndUserId(orgId, userId);
+        List<OrgUserRoleEntity> saved = req.getRoles().stream()
+            .map(r -> orgUserRoleRepository.save(
+                OrgUserRoleEntity.builder()
+                    .orgId(orgId)
+                    .userId(userId)
+                    .role(OrgRole.valueOf(r.getValue()))
+                    .build()))
+            .toList();
+        return saved;
     }
 
     @PreAuthorize("@orgRoleEvaluator.hasRole(#orgId, authentication, 'ADMIN')")
@@ -105,6 +133,7 @@ public class OrganizationService {
         if (!orgMembershipRepository.existsByOrgIdAndUserId(orgId, userId)) {
             throw new AppException(HttpStatus.NOT_FOUND, "User is not a member of this organization");
         }
+        orgUserRoleRepository.deleteByOrgIdAndUserId(orgId, userId);
         orgMembershipRepository.deleteByOrgIdAndUserId(orgId, userId);
     }
 

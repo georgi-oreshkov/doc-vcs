@@ -20,7 +20,7 @@ export default function ManageReviewersModal({
   const [selectedIds, setSelectedIds] = useState([]);
   const updateDoc = useUpdateDocument();
 
-  const reviewers = orgUsers.filter((u) => u.role === 'REVIEWER');
+  const reviewers = orgUsers.filter((u) => (Array.isArray(u.roles) ? u.roles : [u.role]).includes('REVIEWER'));
 
   // Sync selection when modal opens or reviewerIds change
   useEffect(() => {

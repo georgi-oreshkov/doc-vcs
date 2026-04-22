@@ -9,18 +9,21 @@ const ROLE_COLORS = {
 };
 
 export default function OrganizationCard({ org, onSelect, onOpenModal, isSelected, onLeave, isLeaving }) {
-  const role = org.my_role;
+  const roles = Array.isArray(org.my_roles) ? org.my_roles : (org.my_role ? [org.my_role] : []);
+  const primaryRoleValue = roles[0] || null;
   return (
     <Card className="bg-zinc-900 border border-zinc-800 hover:border-lime-500/50 transition-colors">
       <CardHeader className="justify-between">
         <div className="w-12 h-12 rounded-xl bg-black border border-zinc-800 flex items-center justify-center text-zinc-400">
           <Building2 size={24} strokeWidth={1.5} />
         </div>
-        {role && (
-          <Chip color={ROLE_COLORS[role] || 'default'} variant="flat">
-            {role}
-          </Chip>
-        )}
+        <div className="flex flex-wrap gap-1 justify-end">
+          {roles.map((r) => (
+            <Chip key={r} color={ROLE_COLORS[r] || 'default'} variant="flat" size="sm">
+              {r}
+            </Chip>
+          ))}
+        </div>
       </CardHeader>
       <CardBody>
         <h3 className="text-xl font-bold text-white mb-2">{org.name}</h3>
@@ -54,7 +57,7 @@ export default function OrganizationCard({ org, onSelect, onOpenModal, isSelecte
             Workspace
           </Button>
         )}
-        {role === 'ADMIN' && !isSelected && (
+        {roles.includes('ADMIN') && !isSelected && (
           <Button isIconOnly variant="bordered" className="border-zinc-700 text-zinc-300" onClick={() => onOpenModal(org)}>
             <Settings size={18} />
           </Button>

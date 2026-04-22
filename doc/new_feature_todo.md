@@ -1,2 +1,9 @@
 - [ ] update when adding users to an organization, one should be able to search users by username or email or first or last name.
-- [ ]
+- [ ] all users can add comments, users should be able to answer on anothers user comment
+  - [ ] that may require db changes to include self referencing for parent relationship
+  - [ ] comments should be seen in a window at the version screen for each version
+  - [ ] comments from assigned reviewer should light up in red.
+- [ ] admin should be able to asign multiple roles to one user.
+  - [ ] the api and backend were already set up this way.
+  - [ ] the frontend labels for the roles should change to show all the badges, when having more than 1, they should be small and round with the first letter of the role to avoid clutter.
+  - [ ] the admin panel should give you the ability to add or remove roles from a checkbox menu pop-up.

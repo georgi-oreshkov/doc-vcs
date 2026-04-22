@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -43,5 +44,11 @@ public class UserService {
             .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "User profile not found"));
         userMapper.applyUpdate(req, entity);
         return userProfileRepository.save(entity);
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserProfileEntity> searchUsers(String q) {
+        if (q == null || q.isBlank()) return List.of();
+        return userProfileRepository.searchByNameOrEmail(q.trim());
     }
 }

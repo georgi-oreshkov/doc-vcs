@@ -13,6 +13,8 @@ import com.root.vcsbackend.model.S3UploadResponse;
 import com.root.vcsbackend.model.Version;
 import com.root.vcsbackend.shared.security.SecurityHelper;
 import com.root.vcsbackend.shared.web.PageMapper;
+import com.root.vcsbackend.user.api.UserFacade;
+import com.root.vcsbackend.user.domain.UserProfileEntity;
 import com.root.vcsbackend.version.mapper.VersionMapper;
 import com.root.vcsbackend.version.service.VersionService;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -34,6 +37,7 @@ public class VersionsController implements VersionsApi {
     private final VersionMapper versionMapper;
     private final PageMapper pageMapper;
     private final SecurityHelper securityHelper;
+    private final UserFacade userFacade;
 
     // NEW: Request Review endpoint
     @PostMapping("/documents/{docId}/versions/{versionId}/request-review")
@@ -46,9 +50,10 @@ public class VersionsController implements VersionsApi {
     @Override
     public ResponseEntity<Comment> addComment(UUID docId, UUID versionId, AddCommentRequest req) {
         UUID callerId = securityHelper.currentUser().userId();
-        return ResponseEntity.status(HttpStatus.CREATED)
-            .body(versionMapper.toCommentDto(
-                versionService.addComment(docId, versionId, req.getContent(), callerId)));
+        var entity = versionService.addComment(docId, versionId, req.getContent(), callerId);
+        Comment dto = versionMapper.toCommentDto(entity);
+        dto.setAuthorName(userFacade.resolveUser(callerId).getName());
+        return ResponseEntity.status(HttpStatus.CREATED).body(dto);
     }
 
     @Override
@@ -85,9 +90,15 @@ public class VersionsController implements VersionsApi {
 
     @Override
     public ResponseEntity<List<Comment>> listComments(UUID docId, UUID versionId) {
-        List<Comment> comments = versionService.listComments(docId, versionId).stream()
-            .map(versionMapper::toCommentDto)
-            .toList();
+        var entities = versionService.listComments(docId, versionId);
+        List<UUID> authorIds = entities.stream().map(c -> c.getAuthorId()).distinct().toList();
+        Map<UUID, UserProfileEntity> profiles = userFacade.resolveUsers(authorIds);
+        List<Comment> comments = entities.stream().map(c -> {
+            Comment dto = versionMapper.toCommentDto(c);
+            UserProfileEntity profile = profiles.get(c.getAuthorId());
+            if (profile != null) dto.setAuthorName(profile.getName());
+            return dto;
+        }).toList();
         return ResponseEntity.ok(comments);
     }
 

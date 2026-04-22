@@ -1,6 +1,5 @@
 package com.root.vcsbackend.organization.domain;
 
-import com.root.vcsbackend.shared.domain.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -8,15 +7,15 @@ import java.util.UUID;
 
 @Entity
 @Table(
-    name = "org_memberships",
-    uniqueConstraints = @UniqueConstraint(columnNames = {"org_id", "user_id"})
+    name = "org_user_roles",
+    uniqueConstraints = @UniqueConstraint(columnNames = {"org_id", "user_id", "role"})
 )
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class OrgMembershipEntity extends BaseEntity {
+public class OrgUserRoleEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -28,8 +27,7 @@ public class OrgMembershipEntity extends BaseEntity {
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
-    /** Matches OpenAPI OrgUser.RolesEnum exactly. */
-    public enum OrgRole {
-        ADMIN, AUTHOR, REVIEWER, READER
-    }
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private OrgMembershipEntity.OrgRole role;
 }
