@@ -1,0 +1,2 @@
+- notification doesnt refresh automatically, requires page refresh
+- a lot of components should refresh automatically like when uploading a version, receiving notifications or requests.
