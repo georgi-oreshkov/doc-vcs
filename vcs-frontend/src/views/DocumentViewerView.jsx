@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, Slider, ButtonGroup, Spinner, useDisclosure, addToast, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Textarea, Select, SelectItem, Chip } from "@heroui/react";
+import { Button, Slider, ButtonGroup, Spinner, useDisclosure, addToast, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Textarea } from "@heroui/react";
 import { ArrowLeft, History, Download, UploadCloud, RotateCcw, Columns, AlignLeft, Send, CheckCircle, XCircle } from 'lucide-react';
-import { useDocument, useUpdateDocument } from '../hooks/useDocuments';
+import { useDocument } from '../hooks/useDocuments';
 import { useVersions, useDiff, useRollbackVersion, useApproveVersion, useRejectVersion } from '../hooks/useVersions';
 import { formatVersionNumber } from '../api/transforms';
 import { getVersionDownloadUrl, requestReview } from '../api/versionsApi';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useOrg } from '../context/OrgContext';
-import { useCategories } from '../hooks/useCategories';
 import NewVersionModal from '../components/NewVersionModal';
 import CommentsPanel from '../components/CommentsPanel';
 
@@ -28,19 +27,8 @@ export default function DocumentViewerView() {
 
   const { activeRoles } = useOrg();
   const isReviewer = activeRoles.includes('REVIEWER') || activeRoles.includes('ADMIN');
-  const canEditCategory = activeRoles.includes('ADMIN') || activeRoles.includes('AUTHOR');
 
   const { data: doc, isLoading: docLoading } = useDocument(docId);
-  const { data: categoriesData = [] } = useCategories(doc?.org_id ?? null);
-  const updateDocument = useUpdateDocument();
-
-  // Local state for category selection — avoids [object Object] key if the backend
-  // returns JsonNullable as an unwrapped object instead of a plain UUID string.
-  const [selectedCategoryKeys, setSelectedCategoryKeys] = useState(new Set([]));
-  useEffect(() => {
-    const id = doc?.category_id;
-    setSelectedCategoryKeys(typeof id === 'string' ? new Set([id]) : new Set([]));
-  }, [doc?.category_id]);
   const { data: versionsData, isLoading: versionsLoading } = useVersions(docId, { page: 0, size: 100 });
   const rollback = useRollbackVersion();
 
@@ -60,7 +48,7 @@ export default function DocumentViewerView() {
   const prevVersion = effectiveIndex > 0 ? versions[effectiveIndex - 1] : null;
   const isLatest = effectiveIndex === versions.length - 1;
 
-  // Request Review Mutation
+  // Mutation for requesting a review
   const reviewMutation = useMutation({
     mutationFn: () => requestReview(docId, selectedVersion.id),
     onSuccess: () => {
@@ -92,6 +80,7 @@ export default function DocumentViewerView() {
 
   const { data: diffData, isLoading: diffLoading } = useDiff(docId, prevVersion?.id, selectedVersion?.id);
 
+  // Render the diff view
   useEffect(() => {
     if (!diffData?.diff) {
       setRenderedDiff(null);
@@ -126,6 +115,7 @@ export default function DocumentViewerView() {
 
   const isV1 = effectiveIndex === 0 && versions.length > 0;
   
+  // Logic for Version 1 full preview rendering
   useEffect(() => {
     if (!isV1 || !selectedVersion?.id || !docId) {
       setV1Preview(null);
@@ -143,7 +133,9 @@ export default function DocumentViewerView() {
         const resp = await fetch(download_url);
         if (cancelled) return;
         const text = await resp.text();
-        if (!cancelled) setV1Preview(text.split('\n').slice(0, 30).join('\n'));
+        
+        // Removed the slice restriction to load the full document
+        if (!cancelled) setV1Preview(text);
       } catch (err) {
         console.error(err);
       } finally {
@@ -170,7 +162,7 @@ export default function DocumentViewerView() {
   if (docLoading || versionsLoading) return <div className="flex justify-center py-40"><Spinner color="primary" size="lg" /></div>;
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8 w-full z-10 flex-grow flex flex-col relative">
+    <div className="max-w-7xl mx-auto px-6 py-8 w-full z-10 flex-grow flex flex-col relative h-full">
       <div className="flex items-center gap-2 text-sm text-zinc-500 mb-6 border-b border-zinc-800 pb-4">
         <button onClick={() => navigate(-1)} className="flex items-center gap-1 hover:text-white transition"><ArrowLeft size={16} /> Back</button>
         <span>/</span>
@@ -183,45 +175,19 @@ export default function DocumentViewerView() {
             <History size={16} className="text-lime-500" />
             <span className="text-sm font-semibold text-white">Version Timeline</span>
           </div>
-          {versions.length > 0 && (
-            <Slider step={1} maxValue={versions.length - 1} minValue={0} value={effectiveIndex} onChange={setSliderIndex} color="primary" showSteps={true} marks={versions.map(v => ({ value: v.value, label: v.label }))} className="max-w-md" />
-          )}
-
-          {categoriesData.length > 0 && (
-            <div className="mt-6 flex items-center gap-3">
-              <span className="text-xs text-zinc-500 shrink-0">Category</span>
-              {canEditCategory ? (
-                <Select
-                  isClearable
-                  size="sm"
-                  variant="bordered"
-                  aria-label="Document category"
-                  placeholder="None"
-                  className="max-w-[200px]"
-                  selectedKeys={selectedCategoryKeys}
-                  onSelectionChange={(keys) => {
-                    const val = Array.from(keys)[0] ?? null;
-                    setSelectedCategoryKeys(val ? new Set([val]) : new Set([]));
-                    updateDocument.mutate(
-                      { docId, data: { category_id: val } },
-                      { onSuccess: () => addToast({ title: 'Category updated', color: 'success' }) }
-                    );
-                  }}
-                  classNames={{ trigger: "border-zinc-700 bg-zinc-900/50 h-8 min-h-8", value: "text-zinc-300 text-xs" }}
-                >
-                  {categoriesData.map((c) => (
-                    <SelectItem key={c.id}>{c.name}</SelectItem>
-                  ))}
-                </Select>
-              ) : (
-                typeof doc?.category_id === 'string' ? (
-                  <Chip size="sm" variant="flat" className="bg-zinc-800 text-zinc-300 text-xs">
-                    {categoriesData.find(c => c.id === doc.category_id)?.name ?? 'Unknown'}
-                  </Chip>
-                ) : (
-                  <span className="text-xs text-zinc-600 italic">None</span>
-                )
-              )}
+          
+          {/* Prevent slider rendering if there is only 1 version */}
+          {versions.length > 1 ? (
+            <Slider 
+              step={1} maxValue={versions.length - 1} minValue={0} 
+              value={effectiveIndex} onChange={setSliderIndex} 
+              color="primary" showSteps={true} 
+              marks={versions.map(v => ({ value: v.value, label: v.label }))} 
+              className="max-w-md" 
+            />
+          ) : (
+            <div className="text-sm text-zinc-500 bg-zinc-800/30 border border-zinc-800 rounded-lg px-4 py-2 inline-flex w-fit font-mono">
+              V1 (Initial Version)
             </div>
           )}
         </div>
@@ -231,19 +197,24 @@ export default function DocumentViewerView() {
             <div className="text-right mr-4 hidden sm:block">
               <div className="text-sm font-bold text-white flex items-center gap-2 justify-end">
                 Viewing: {selectedVersion.label}
-                {selectedVersion.status === 'DRAFT' && <span className="bg-default-500/20 text-default-400 text-[10px] px-2 py-0.5 rounded uppercase">Draft</span>}
-                {selectedVersion.status === 'PENDING' && <span className="bg-warning-500/20 text-warning-400 text-[10px] px-2 py-0.5 rounded uppercase">Reviewing</span>}
+                {/* Properly check the boolean is_draft flag */}
+                {selectedVersion.is_draft === true && (
+                  <span className="bg-default-500/20 text-default-400 text-[10px] px-2 py-0.5 rounded uppercase">Draft</span>
+                )}
+                {selectedVersion.is_draft === false && selectedVersion.status === 'PENDING' && (
+                  <span className="bg-warning-500/20 text-warning-400 text-[10px] px-2 py-0.5 rounded uppercase">Reviewing</span>
+                )}
               </div>
             </div>
           )}
           
-          {selectedVersion?.status === 'DRAFT' && (
+          {selectedVersion?.is_draft === true && (
             <Button color="secondary" startContent={<Send size={16} />} onPress={() => reviewMutation.mutate()} isLoading={reviewMutation.isPending}>
               Request Review
             </Button>
           )}
 
-          {selectedVersion?.status === 'PENDING' && isReviewer && (
+          {selectedVersion?.is_draft === false && selectedVersion?.status === 'PENDING' && isReviewer && (
             <>
               <Button color="success" variant="flat" startContent={<CheckCircle size={16} />} onPress={handleApprove} isLoading={approveVersion.isPending}>
                 Approve
@@ -264,20 +235,22 @@ export default function DocumentViewerView() {
         </div>
       </div>
 
-      <div className="flex-grow min-h-[400px] bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden flex flex-col relative">
-        <div className="bg-zinc-900 border-b border-zinc-800 p-3 flex justify-between items-center">
+      {/* Main viewer container with fixed boundaries for internal scrolling */}
+      <div className="flex-grow max-h-[600px] min-h-[400px] bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden flex flex-col relative mb-8">
+        <div className="bg-zinc-900 border-b border-zinc-800 p-3 flex justify-between items-center shrink-0">
           <div className="text-sm font-medium flex items-center gap-2">
             <span className="bg-zinc-800 px-2 py-0.5 rounded text-xs font-mono text-zinc-300">{prevVersion ? prevVersion.label : 'Initial'}</span>
             <span className="text-zinc-500">&rarr;</span>
             <span className="bg-lime-500/20 border border-lime-500/30 px-2 py-0.5 rounded text-xs font-mono text-lime-400 font-bold">{selectedVersion?.label || '—'}</span>
           </div>
           <ButtonGroup size="sm">
-            <Button variant={diffMode === 'split' ? "solid" : "bordered"} color={diffMode === 'split' ? "default" : "default"} onPress={() => setDiffMode('split')} startContent={<Columns size={14} />} className={diffMode === 'split' ? "bg-zinc-700" : "border-zinc-700 text-zinc-400"}>Split</Button>
-            <Button variant={diffMode === 'unified' ? "solid" : "bordered"} color={diffMode === 'unified' ? "default" : "default"} onPress={() => setDiffMode('unified')} startContent={<AlignLeft size={14} />} className={diffMode === 'unified' ? "bg-zinc-700" : "border-zinc-700 text-zinc-400"}>Unified</Button>
+            <Button variant={diffMode === 'split' ? "solid" : "bordered"} color="default" onPress={() => setDiffMode('split')} startContent={<Columns size={14} />} className={diffMode === 'split' ? "bg-zinc-700" : "border-zinc-700 text-zinc-400"}>Split</Button>
+            <Button variant={diffMode === 'unified' ? "solid" : "bordered"} color="default" onPress={() => setDiffMode('unified')} startContent={<AlignLeft size={14} />} className={diffMode === 'unified' ? "bg-zinc-700" : "border-zinc-700 text-zinc-400"}>Unified</Button>
           </ButtonGroup>
         </div>
 
-        <div className="flex-grow overflow-auto font-mono text-sm bg-zinc-950/50">
+        {/* Scrollable area preventing white overscroll bounce via overscroll-contain */}
+        <div className="flex-grow overflow-auto font-mono text-sm bg-zinc-950 text-zinc-300 overscroll-contain">
           {diffLoading || diffRendering || v1PreviewLoading ? (
             <div className="flex justify-center items-center h-full"><Spinner color="primary" /></div>
           ) : renderedDiff ? (
@@ -289,13 +262,15 @@ export default function DocumentViewerView() {
           )}
         </div>
       </div>
-      <NewVersionModal isOpen={isNewVersionOpen} onOpenChange={onNewVersionOpenChange} docId={docId} versions={versionsData?.content || versionsData || []} />
 
       {selectedVersion && (
-        <CommentsPanel docId={docId} versionId={selectedVersion.id} />
+        <div className="shrink-0">
+          <CommentsPanel docId={docId} versionId={selectedVersion.id} />
+        </div>
       )}
 
-      {/* Reject reason modal */}
+      <NewVersionModal isOpen={isNewVersionOpen} onOpenChange={onNewVersionOpenChange} docId={docId} versions={versionsData?.content || versionsData || []} />
+
       <Modal isOpen={showRejectModal} onOpenChange={(open) => { if (!open) setShowRejectModal(false); }}>
         <ModalContent className="bg-zinc-900 border border-zinc-800">
           <ModalHeader className="text-white">Reject Version</ModalHeader>
@@ -319,6 +294,8 @@ export default function DocumentViewerView() {
   );
 }
 
+// ─── Diff Rendering Components ────────────────────────────────────────────────
+
 function lineClass(line) {
   if (line.startsWith('+')) return 'text-emerald-400 bg-emerald-950/40';
   if (line.startsWith('-')) return 'text-red-400 bg-red-950/40';
@@ -329,7 +306,7 @@ function lineClass(line) {
 function UnifiedDiffView({ diff }) {
   const lines = diff.split('\n');
   return (
-    <table className="w-full table-fixed border-collapse text-xs">
+    <table className="w-full table-fixed border-collapse text-xs bg-zinc-950">
       <tbody>
         {lines.map((line, i) => (
           <tr key={i} className={lineClass(line)}>
@@ -352,7 +329,7 @@ function SplitDiffView({ diff }) {
   }
   const maxLen = Math.max(leftLines.length, rightLines.length);
   return (
-    <table className="w-full table-fixed border-collapse text-xs">
+    <table className="w-full table-fixed border-collapse text-xs bg-zinc-950">
       <tbody>
         {Array.from({ length: maxLen }, (_, i) => (
           <tr key={i}>
@@ -365,15 +342,16 @@ function SplitDiffView({ diff }) {
   );
 }
 
+// Renders the first version with a dark container and green highlighted lines 
 function V1PreviewView({ content }) {
   const lines = content.split('\n');
   return (
-    <table className="w-full table-fixed border-collapse text-xs">
+    <table className="w-full table-fixed border-collapse text-xs bg-zinc-950">
       <tbody>
         {lines.map((line, i) => (
           <tr key={i} className="text-emerald-400 bg-emerald-950/40">
-            <td className="select-none w-12 text-right pr-4 py-0.5 text-zinc-600 border-r border-zinc-800">{i + 1}</td>
-            <td className="px-4 py-0.5 whitespace-pre-wrap break-all">{line || ' '}</td>
+            <td className="select-none w-12 text-right pr-4 py-0.5 text-zinc-600 border-r border-zinc-800 bg-zinc-950">{i + 1}</td>
+            <td className="px-4 py-0.5 whitespace-pre-wrap break-all pl-4">{line || ' '}</td>
           </tr>
         ))}
       </tbody>
