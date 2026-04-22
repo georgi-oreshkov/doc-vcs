@@ -33,6 +33,14 @@ export default function DocumentViewerView() {
   const { data: doc, isLoading: docLoading } = useDocument(docId);
   const { data: categoriesData = [] } = useCategories(doc?.org_id ?? null);
   const updateDocument = useUpdateDocument();
+
+  // Local state for category selection — avoids [object Object] key if the backend
+  // returns JsonNullable as an unwrapped object instead of a plain UUID string.
+  const [selectedCategoryKeys, setSelectedCategoryKeys] = useState(new Set([]));
+  useEffect(() => {
+    const id = doc?.category_id;
+    setSelectedCategoryKeys(typeof id === 'string' ? new Set([id]) : new Set([]));
+  }, [doc?.category_id]);
   const { data: versionsData, isLoading: versionsLoading } = useVersions(docId, { page: 0, size: 100 });
   const rollback = useRollbackVersion();
 
@@ -190,9 +198,10 @@ export default function DocumentViewerView() {
                   aria-label="Document category"
                   placeholder="None"
                   className="max-w-[200px]"
-                  selectedKeys={doc?.category_id ? new Set([doc.category_id]) : new Set([])}
+                  selectedKeys={selectedCategoryKeys}
                   onSelectionChange={(keys) => {
                     const val = Array.from(keys)[0] ?? null;
+                    setSelectedCategoryKeys(val ? new Set([val]) : new Set([]));
                     updateDocument.mutate(
                       { docId, data: { category_id: val } },
                       { onSuccess: () => addToast({ title: 'Category updated', color: 'success' }) }
@@ -205,7 +214,7 @@ export default function DocumentViewerView() {
                   ))}
                 </Select>
               ) : (
-                doc?.category_id ? (
+                typeof doc?.category_id === 'string' ? (
                   <Chip size="sm" variant="flat" className="bg-zinc-800 text-zinc-300 text-xs">
                     {categoriesData.find(c => c.id === doc.category_id)?.name ?? 'Unknown'}
                   </Chip>
