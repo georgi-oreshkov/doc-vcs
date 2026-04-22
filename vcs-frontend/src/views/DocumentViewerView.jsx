@@ -189,10 +189,22 @@ export default function DocumentViewerView() {
           {/* Prevent slider rendering if there is only 1 version */}
           {versions.length > 1 ? (
             <Slider
-              step={1} maxValue={versions.length - 1} minValue={0}
-              value={effectiveIndex} onChange={setSliderIndex}
-              color="primary" showSteps={true}
-              marks={versions.map(v => ({ value: v.value, label: v.label }))}
+              step={1} 
+              maxValue={versions.length - 1} 
+              minValue={0}
+              value={effectiveIndex} 
+              onChange={setSliderIndex}
+              color="primary" 
+              showSteps={versions.length <= 20} 
+              marks={
+                versions.length <= 10 
+                  ? // If 10 or fewer versions, show all of them
+                    versions.map(v => ({ value: v.value, label: v.label }))
+                  : // If more than 10, apply the interval filter
+                    versions
+                      .filter((v, i) => i === 0 || i === versions.length - 1 || v.version_number % 10 === 0)
+                      .map(v => ({ value: v.value, label: v.label }))
+              }
               className="max-w-md"
             />
           ) : (
