@@ -1,13 +1,12 @@
 import { useState, useMemo } from 'react';
 import { Input, Select, SelectItem } from "@heroui/react";
-import { Search, Filter, User } from 'lucide-react';
+import { Search, Filter, User, Tag } from 'lucide-react';
 
 // 1. This hook encapsulates all the filter logic and state management for documents
 export function useDocumentFilters(docs) {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedAuthor, setSelectedAuthor] = useState(new Set([]));
     const [selectedStatus, setSelectedStatus] = useState(new Set([]));
-
     const filteredDocuments = useMemo(() => {
         return docs.filter((doc) => {
             const authorFilterArray = Array.from(selectedAuthor);
@@ -38,13 +37,16 @@ export default function DocumentsFilter({
     setSelectedAuthor,
     selectedStatus,
     setSelectedStatus,
+    selectedCategory,
+    setSelectedCategory,
     orgUsers = [],
+    categories = [],
 }) {
     return (
         <div className="flex flex-col lg:flex-row gap-4 mb-8 bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/80">
-            
+
             <Input
-                className="w-full lg:flex-1" 
+                className="w-full lg:flex-1"
                 variant="bordered"
                 startContent={<Search size={18} className="text-zinc-500" />}
                 placeholder="Search documents by title..."
@@ -83,8 +85,24 @@ export default function DocumentsFilter({
                     <SelectItem key="Draft">Draft</SelectItem>
                     <SelectItem key="Rejected">Rejected</SelectItem>
                 </Select>
+
+                {categories.length > 0 && (
+                    <Select
+                        isClearable
+                        variant="bordered"
+                        className="w-full sm:w-1/2 lg:w-48 xl:w-64"
+                        placeholder="Filter by Category"
+                        startContent={<Tag size={18} className="text-zinc-500" />}
+                        selectedKeys={selectedCategory}
+                        onSelectionChange={setSelectedCategory}
+                    >
+                        {categories.map((c) => (
+                            <SelectItem key={c.id}>{c.name}</SelectItem>
+                        ))}
+                    </Select>
+                )}
             </div>
-            
+
         </div>
     );
 }

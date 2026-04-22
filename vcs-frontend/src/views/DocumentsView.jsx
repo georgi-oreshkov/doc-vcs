@@ -10,6 +10,7 @@ import ManageReviewersModal from '../components/ManageReviewersModal';
 import { useOrgDocuments, useMyDocuments, useCreateDocument, useDeleteDocument } from '../hooks/useDocuments';
 import { useOrg } from '../context/OrgContext';
 import { useOrganization, useOrgUsers } from '../hooks/useOrganizations';
+import { useCategories } from '../hooks/useCategories';
 import { displayStatus } from '../api/transforms';
 
 export default function DocumentsView({ myDocs }) {
@@ -25,13 +26,16 @@ export default function DocumentsView({ myDocs }) {
 
   const [docToDelete, setDocToDelete] = useState(null);
   const [docForReviewers, setDocForReviewers] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState(new Set([]));
 
   const effectiveOrgId = orgId || selectedOrg?.id;
   const { data: orgData } = useOrganization(effectiveOrgId);
   const { data: orgUsersData = [] } = useOrgUsers(myDocs ? null : effectiveOrgId);
   const orgUsers = Array.isArray(orgUsersData) ? orgUsersData : [];
+  const { data: categoriesData = [] } = useCategories(myDocs ? null : effectiveOrgId);
 
-  const { data: orgDocsData, isLoading: orgLoading } = useOrgDocuments(effectiveOrgId, {}, );
+  const categoryId = Array.from(selectedCategory)[0] ?? undefined;
+  const { data: orgDocsData, isLoading: orgLoading } = useOrgDocuments(effectiveOrgId, categoryId ? { category_id: categoryId } : {});
   const { data: myDocsData, isLoading: myLoading } = useMyDocuments();
   const createDoc = useCreateDocument();
   const deleteDoc = useDeleteDocument();
@@ -41,6 +45,7 @@ export default function DocumentsView({ myDocs }) {
 
   const docs = rawDocs.map(doc => {
     const authorUser = orgUsers.find(u => u.user_id === doc.author_id);
+    const categoryName = categoriesData.find(c => c.id === doc.category_id)?.name ?? null;
     return {
       id: doc.id,
       title: doc.name,
@@ -53,6 +58,7 @@ export default function DocumentsView({ myDocs }) {
       canDelete: activeRole === 'ADMIN' || doc.author_id === currentUserId,
       canManageReviewers: activeRole === 'ADMIN',
       reviewerIds: doc.reviewer_ids || [],
+      categoryName,
     };
   });
 
@@ -113,8 +119,8 @@ export default function DocumentsView({ myDocs }) {
           <p className="text-zinc-400 text-sm">Search, filter, and manage your organization's versioned documents.</p>
         </div>
         {!myDocs && (activeRole === 'AUTHOR' || activeRole === 'ADMIN') && (
-          <Button 
-            className="bg-lime-600 text-black font-bold hover:bg-lime-500 disabled:bg-zinc-800 disabled:text-zinc-600 transition-colors" 
+          <Button
+            className="bg-lime-600 text-black font-bold hover:bg-lime-500 disabled:bg-zinc-800 disabled:text-zinc-600 transition-colors"
             startContent={<Plus size={18} />} onPress={onOpen}
           >
             New Document
@@ -122,7 +128,13 @@ export default function DocumentsView({ myDocs }) {
         )}
       </div>
 
-      <DocumentsFilter {...filterProps} orgUsers={orgUsers} />
+      <DocumentsFilter
+        {...filterProps}
+        orgUsers={orgUsers}
+        categories={categoriesData}
+        selectedCategory={selectedCategory}
+        setSelectedCategory={setSelectedCategory}
+      />
 
       {isLoading ? (
         <div className="flex justify-center py-20"><Spinner color="primary" size="lg" /></div>
@@ -139,18 +151,19 @@ export default function DocumentsView({ myDocs }) {
               onManageReviewers={handleManageReviewers}
             />
           ))}
-          
+
           {filteredDocuments.length === 0 && (
             <p className="text-zinc-500 col-span-2">No documents match your filters.</p>
           )}
         </div>
       )}
 
-      <NewDocumentModal 
-        isOpen={isOpen} 
-        onOpenChange={onOpenChange} 
+      <NewDocumentModal
+        isOpen={isOpen}
+        onOpenChange={onOpenChange}
         onSave={handleCreateDocument}
         isSaving={createDoc.isPending}
+        categories={categoriesData}
       />
 
       {/* Delete confirmation modal */}

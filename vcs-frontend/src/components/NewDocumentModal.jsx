@@ -6,17 +6,20 @@ import {
     ModalBody,
     ModalFooter,
     Button,
-    Input
+    Input,
+    Select,
+    SelectItem
 } from "@heroui/react";
 import { UploadCloud, FileText, X } from "lucide-react";
 import { createDocument } from '../api/documentsApi';
 import { uploadFileToS3 } from '../api/versionsApi';
 import { useOrg } from '../context/OrgContext';
 
-export default function NewDocumentModal({ isOpen, onOpenChange, onSave, isSaving }) {
+export default function NewDocumentModal({ isOpen, onOpenChange, onSave, isSaving, categories = [] }) {
     const [title, setTitle] = useState("");
     const [file, setFile] = useState(null);
     const [uploading, setUploading] = useState(false);
+    const [selectedCategory, setSelectedCategory] = useState(new Set([]));
     const fileInputRef = useRef(null);
     const { selectedOrg } = useOrg();
 
@@ -27,7 +30,13 @@ export default function NewDocumentModal({ isOpen, onOpenChange, onSave, isSavin
         }
     };
 
-    // Function to handle saving the document (placeholder for now)
+    const resetForm = () => {
+        setTitle("");
+        setFile(null);
+        setSelectedCategory(new Set([]));
+    };
+
+    // Function to handle saving the document
     const handleSave = async (onClose) => {
         if (!file || !title) {
             console.error("Missing title or file");
@@ -39,17 +48,21 @@ export default function NewDocumentModal({ isOpen, onOpenChange, onSave, isSavin
             return;
         }
 
+        const categoryId = Array.from(selectedCategory)[0] ?? undefined;
+        const docData = { name: title, ...(categoryId ? { category_id: categoryId } : {}) };
+
         try {
             setUploading(true);
 
             // If parent component provides onSave callback, use it (e.g., DocumentsView)
             if (onSave) {
-                await onSave({ name: title }, file, onClose);
+                await onSave(docData, file, onClose);
+                resetForm();
             } else {
                 // Otherwise, handle the upload ourselves
                 // 1. Create the document and get presigned upload URL
-                const response = await createDocument(selectedOrg.id, { name: title });
-                
+                const response = await createDocument(selectedOrg.id, docData);
+
                 if (!response.upload_url) {
                     throw new Error("Failed to get presigned URL");
                 }
@@ -58,8 +71,7 @@ export default function NewDocumentModal({ isOpen, onOpenChange, onSave, isSavin
                 await uploadFileToS3(response.upload_url, file);
 
                 // 3. Reset UI
-                setTitle("");
-                setFile(null);
+                resetForm();
                 onClose();
             }
         } catch (error) {
@@ -93,6 +105,27 @@ export default function NewDocumentModal({ isOpen, onOpenChange, onSave, isSavin
                                     }}
                                 />
                             </div>
+
+                            {categories.length > 0 && (
+                                <div>
+                                    <p className="text-sm text-zinc-400 mb-2">Category <span className="text-zinc-600">(optional)</span></p>
+                                    <Select
+                                        isClearable
+                                        variant="bordered"
+                                        placeholder="Select a category"
+                                        selectedKeys={selectedCategory}
+                                        onSelectionChange={setSelectedCategory}
+                                        classNames={{
+                                            trigger: "border-zinc-800 bg-zinc-900/50 hover:border-zinc-700",
+                                            value: "text-white"
+                                        }}
+                                    >
+                                        {categories.map((c) => (
+                                            <SelectItem key={c.id}>{c.name}</SelectItem>
+                                        ))}
+                                    </Select>
+                                </div>
+                            )}
 
                             {/* Upload Zone */}
                             <div>
@@ -131,12 +164,12 @@ export default function NewDocumentModal({ isOpen, onOpenChange, onSave, isSavin
 
                         </ModalBody>
                         <ModalFooter>
-                            <Button color="danger" variant="light"  onPress={onClose}>
+                            <Button color="danger" variant="light" onPress={onClose}>
                                 Cancel
                             </Button>
-                            <Button 
+                            <Button
                                 className="bg-lime-600 text-black font-bold hover:bg-lime-500 disabled:bg-zinc-800 disabled:text-zinc-600 transition-colors"
-                                onPress={() => handleSave(onClose)} 
+                                onPress={() => handleSave(onClose)}
                                 isDisabled={!title || !file}
                                 isLoading={uploading || isSaving}
                             >

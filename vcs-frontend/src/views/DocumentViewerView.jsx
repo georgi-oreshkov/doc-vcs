@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, Slider, ButtonGroup, Spinner, useDisclosure, addToast, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Textarea } from "@heroui/react";
+import { Button, Slider, ButtonGroup, Spinner, useDisclosure, addToast, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Textarea, Select, SelectItem, Chip } from "@heroui/react";
 import { ArrowLeft, History, Download, UploadCloud, RotateCcw, Columns, AlignLeft, Send, CheckCircle, XCircle } from 'lucide-react';
-import { useDocument } from '../hooks/useDocuments';
+import { useDocument, useUpdateDocument } from '../hooks/useDocuments';
 import { useVersions, useDiff, useRollbackVersion, useApproveVersion, useRejectVersion } from '../hooks/useVersions';
 import { formatVersionNumber } from '../api/transforms';
 import { getVersionDownloadUrl, requestReview } from '../api/versionsApi';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useOrg } from '../context/OrgContext';
+import { useCategories } from '../hooks/useCategories';
 import NewVersionModal from '../components/NewVersionModal';
 import CommentsPanel from '../components/CommentsPanel';
 
@@ -27,8 +28,11 @@ export default function DocumentViewerView() {
 
   const { activeRoles } = useOrg();
   const isReviewer = activeRoles.includes('REVIEWER') || activeRoles.includes('ADMIN');
+  const canEditCategory = activeRoles.includes('ADMIN') || activeRoles.includes('AUTHOR');
 
   const { data: doc, isLoading: docLoading } = useDocument(docId);
+  const { data: categoriesData = [] } = useCategories(doc?.org_id ?? null);
+  const updateDocument = useUpdateDocument();
   const { data: versionsData, isLoading: versionsLoading } = useVersions(docId, { page: 0, size: 100 });
   const rollback = useRollbackVersion();
 
@@ -173,6 +177,43 @@ export default function DocumentViewerView() {
           </div>
           {versions.length > 0 && (
             <Slider step={1} maxValue={versions.length - 1} minValue={0} value={effectiveIndex} onChange={setSliderIndex} color="primary" showSteps={true} marks={versions.map(v => ({ value: v.value, label: v.label }))} className="max-w-md" />
+          )}
+
+          {categoriesData.length > 0 && (
+            <div className="mt-6 flex items-center gap-3">
+              <span className="text-xs text-zinc-500 shrink-0">Category</span>
+              {canEditCategory ? (
+                <Select
+                  isClearable
+                  size="sm"
+                  variant="bordered"
+                  aria-label="Document category"
+                  placeholder="None"
+                  className="max-w-[200px]"
+                  selectedKeys={doc?.category_id ? new Set([doc.category_id]) : new Set([])}
+                  onSelectionChange={(keys) => {
+                    const val = Array.from(keys)[0] ?? null;
+                    updateDocument.mutate(
+                      { docId, data: { category_id: val } },
+                      { onSuccess: () => addToast({ title: 'Category updated', color: 'success' }) }
+                    );
+                  }}
+                  classNames={{ trigger: "border-zinc-700 bg-zinc-900/50 h-8 min-h-8", value: "text-zinc-300 text-xs" }}
+                >
+                  {categoriesData.map((c) => (
+                    <SelectItem key={c.id}>{c.name}</SelectItem>
+                  ))}
+                </Select>
+              ) : (
+                doc?.category_id ? (
+                  <Chip size="sm" variant="flat" className="bg-zinc-800 text-zinc-300 text-xs">
+                    {categoriesData.find(c => c.id === doc.category_id)?.name ?? 'Unknown'}
+                  </Chip>
+                ) : (
+                  <span className="text-xs text-zinc-600 italic">None</span>
+                )
+              )}
+            </div>
           )}
         </div>
 

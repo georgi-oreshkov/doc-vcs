@@ -49,6 +49,11 @@ export default function DocumentCard({
                   {doc.version}
                 </Chip>
               )}
+              {doc.categoryName && (
+                <Chip size="sm" variant="flat" className="bg-zinc-800 text-zinc-400 h-5 text-[10px]">
+                  {doc.categoryName}
+                </Chip>
+              )}
             </div>
           </div>
         </div>
