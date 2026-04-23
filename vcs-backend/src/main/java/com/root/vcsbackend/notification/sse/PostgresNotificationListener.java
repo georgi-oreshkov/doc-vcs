@@ -1,7 +1,7 @@
 package com.root.vcsbackend.notification.sse;
 
 import com.root.vcsbackend.notification.domain.NotificationDto;
-import com.root.vcsbackend.version.service.VersionService;
+import com.root.vcsbackend.version.api.VersionFacade;
 import lombok.extern.slf4j.Slf4j;
 import org.postgresql.PGConnection;
 import org.postgresql.PGNotification;
@@ -53,11 +53,11 @@ public class PostgresNotificationListener implements InitializingBean, Disposabl
     private final String dbUser;
     private final String dbPassword;
 
-    private VersionService versionService;
+    private VersionFacade versionFacade;
 
     @Autowired
-    public void setVersionService(@Lazy VersionService versionService) {
-        this.versionService = versionService;
+    public void setVersionFacade(@Lazy VersionFacade versionFacade) {
+        this.versionFacade = versionFacade;
     }
 
     private volatile Connection listenConnection;
@@ -138,7 +138,7 @@ public class PostgresNotificationListener implements InitializingBean, Disposabl
                 if (payload != null && !payload.isNull()) {
                     UUID docId = UUID.fromString(payload.get("docId").asString());
                     int versionNumber = payload.get("version").intValue();
-                    versionService.handleDiffVerified(docId, versionNumber);
+                    versionFacade.handleDiffVerified(docId, versionNumber);
                 }
             }
 

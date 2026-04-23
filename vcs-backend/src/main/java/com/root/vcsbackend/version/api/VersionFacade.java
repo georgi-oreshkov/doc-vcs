@@ -60,4 +60,8 @@ public class VersionFacade {
     public void rejectVersion(UUID docId, UUID versionId, UUID callerId, String reason) {
         versionService.rejectVersion(docId, versionId, callerId, null);
     }
+
+    public void handleDiffVerified(UUID docId, int versionNumber) {
+        versionService.handleDiffVerified(docId, versionNumber);
+    }
 }
