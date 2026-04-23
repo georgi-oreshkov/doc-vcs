@@ -22,4 +22,8 @@ public interface OrgMembershipRepository extends JpaRepository<OrgMembershipEnti
     @Modifying
     @Transactional
     void deleteByOrgIdAndUserId(UUID orgId, UUID userId);
+
+    @Modifying
+    @Transactional
+    void deleteByOrgId(UUID orgId);
 }

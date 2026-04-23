@@ -170,7 +170,12 @@ export default function DocumentViewerView() {
         addToast({ title: 'Preparing', description: "Document being prepared.", color: 'primary' });
         return;
       }
-      window.open(download_url, '_blank');
+      const a = document.createElement('a');
+      a.href = download_url;
+      a.download = `${doc?.name ?? 'document'}_v${selectedVersion.version_number}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     } catch (err) {
       addToast({ title: 'Download failed', description: err?.message, color: 'danger' });
     }

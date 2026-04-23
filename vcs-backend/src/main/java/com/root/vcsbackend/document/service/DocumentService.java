@@ -12,6 +12,8 @@ import com.root.vcsbackend.model.S3UploadResponse;
 import com.root.vcsbackend.shared.exception.AppException;
 import com.root.vcsbackend.shared.s3.S3KeyTemplates;
 import com.root.vcsbackend.shared.s3.S3PresignService;
+import com.root.vcsbackend.shared.security.OrgRoleLookup;
+import com.root.vcsbackend.shared.security.SecurityHelper;
 import com.root.vcsbackend.version.api.VersionFacade;
 import com.root.vcsbackend.version.api.VersionSummary;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +40,8 @@ public class DocumentService {
     private final ApplicationEventPublisher events;
     private final DocumentMapper documentMapper;
     private final VersionFacade versionFacade;
+    private final OrgRoleLookup orgRoleLookup;
+    private final SecurityHelper securityHelper;
 
     @PreAuthorize("@orgRoleEvaluator.hasRole(#orgId, authentication, 'AUTHOR', 'ADMIN')")
     public S3UploadResponse createDocument(UUID orgId, CreateDocumentRequest req, UUID callerId) {
@@ -79,6 +83,12 @@ public class DocumentService {
             }
         }
         if (name != null && !name.isBlank()) spec = spec.and(DocumentSpec.nameLike(name));
+        UUID callerId = securityHelper.currentUser().userId();
+        List<String> callerRoles = orgRoleLookup.findRoles(orgId, callerId);
+        boolean isReaderOnly = !callerRoles.isEmpty() && callerRoles.stream().allMatch(r -> r.equals("READER"));
+        if (isReaderOnly) {
+            spec = spec.and(DocumentSpec.hasStatus("APPROVED"));
+        }
         return documentRepository.findAll(spec, PageRequest.of(page, size));
     }
 

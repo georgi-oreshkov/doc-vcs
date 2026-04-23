@@ -27,6 +27,10 @@ public interface OrgUserRoleRepository extends JpaRepository<OrgUserRoleEntity, 
 
     @Modifying
     @Transactional
+    void deleteByOrgId(UUID orgId);
+
+    @Modifying
+    @Transactional
     @Query(value = "INSERT INTO org_user_roles (id, org_id, user_id, role) VALUES (gen_random_uuid(), :orgId, :userId, :role) ON CONFLICT (org_id, user_id, role) DO NOTHING", nativeQuery = true)
     void insertRoleIfAbsent(@Param("orgId") UUID orgId, @Param("userId") UUID userId, @Param("role") String role);
 }

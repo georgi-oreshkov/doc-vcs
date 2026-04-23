@@ -62,7 +62,10 @@ public class OrganizationService {
 
     @PreAuthorize("@orgRoleEvaluator.hasRole(#orgId, authentication, 'ADMIN')")
     public void deleteOrganization(UUID orgId) {
-        organizationRepository.delete(resolve(orgId));
+        OrganizationEntity org = resolve(orgId);
+        orgUserRoleRepository.deleteByOrgId(orgId);
+        orgMembershipRepository.deleteByOrgId(orgId);
+        organizationRepository.delete(org);
     }
 
     @Transactional(readOnly = true)

@@ -15,9 +15,12 @@ import com.root.vcsbackend.shared.redis.DiffTaskPublisher;
 import com.root.vcsbackend.shared.redis.message.ReconstructTaskMessage;
 import com.root.vcsbackend.shared.redis.message.VerifyTaskMessage;
 import com.root.vcsbackend.shared.redis.message.WorkerTaskType;
+import com.root.vcsbackend.shared.config.S3Properties;
 import com.root.vcsbackend.shared.s3.S3KeyTemplates;
 import com.root.vcsbackend.shared.s3.S3PresignService;
 import com.root.vcsbackend.shared.security.OrgRoleLookup;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import com.root.vcsbackend.version.api.ReviewRequestedEvent;
 import com.root.vcsbackend.version.domain.CommentEntity;
 import com.root.vcsbackend.version.domain.StorageType;
@@ -57,6 +60,8 @@ public class VersionService {
     private final OrgRoleLookup orgRoleLookup;
     private final DiffTaskPublisher diffTaskPublisher;
     private final OrganizationFacade organizationFacade;
+    private final S3Client s3Client;
+    private final S3Properties s3Properties;
 
     @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
     public S3UploadResponse createVersion(UUID docId, CreateVersionRequest req, UUID callerId) {
@@ -290,9 +295,15 @@ public class VersionService {
         VersionEntity target = resolveAndValidate(docId, targetVersionId);
         requireRole(documentFacade.resolveOrgId(docId), callerId, "AUTHOR", "ADMIN");
         int nextNumber = versionRepository.findTopByDocIdOrderByVersionNumberDesc(docId).map(v -> v.getVersionNumber() + 1).orElse(1);
+        s3Client.copyObject(CopyObjectRequest.builder()
+            .sourceBucket(s3Properties.bucket())
+            .sourceKey(S3KeyTemplates.permanentVersion(docId, target.getVersionNumber()))
+            .destinationBucket(s3Properties.bucket())
+            .destinationKey(S3KeyTemplates.permanentVersion(docId, nextNumber))
+            .build());
         VersionEntity rollback = versionRepository.save(VersionEntity.builder()
             .docId(docId).versionNumber(nextNumber).status(VersionStatus.DRAFT).isDraft(true)
-            .checksum(target.getChecksum()).storageType(target.getStorageType()).build());
+            .isUploading(false).checksum(target.getChecksum()).storageType(target.getStorageType()).build());
         documentFacade.updateLatestVersionId(docId, rollback.getId());
         return rollback;
     }
