@@ -48,6 +48,8 @@ export function useUpdateDocument() {
     mutationFn: ({ docId, data }) => updateDocument(docId, data),
     onSuccess: (_, { docId }) => {
       qc.invalidateQueries({ queryKey: ['documents', docId] });
+      qc.invalidateQueries({ queryKey: ['organizations'] }); // Fixes list updates
+      qc.invalidateQueries({ queryKey: ['documents', 'my'] }); // Fixes list updates
     },
   });
 }

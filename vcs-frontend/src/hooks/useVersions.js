@@ -48,6 +48,8 @@ export function useCreateVersion() {
     onSuccess: (_, { docId }) => {
       qc.invalidateQueries({ queryKey: ['documents', docId, 'versions'] });
       qc.invalidateQueries({ queryKey: ['documents', docId] });
+      qc.invalidateQueries({ queryKey: ['organizations'] }); // Refreshes org document lists
+      qc.invalidateQueries({ queryKey: ['documents', 'my'] }); // Refreshes my documents list
     },
   });
 }
@@ -59,6 +61,8 @@ export function useRollbackVersion() {
     onSuccess: (_, { docId }) => {
       qc.invalidateQueries({ queryKey: ['documents', docId, 'versions'] });
       qc.invalidateQueries({ queryKey: ['documents', docId] });
+      qc.invalidateQueries({ queryKey: ['organizations'] }); 
+      qc.invalidateQueries({ queryKey: ['documents', 'my'] });
     },
   });
 }
@@ -72,6 +76,8 @@ export function useApproveVersion() {
       qc.invalidateQueries({ queryKey: ['documents', docId] });
       qc.invalidateQueries({ queryKey: ['requests'] });
       qc.invalidateQueries({ queryKey: ['pendingReviewVersions'] });
+      qc.invalidateQueries({ queryKey: ['organizations'] }); // Refreshes org document lists
+      qc.invalidateQueries({ queryKey: ['documents', 'my'] }); // Refreshes my documents list
     },
   });
 }
@@ -85,6 +91,8 @@ export function useRejectVersion() {
       qc.invalidateQueries({ queryKey: ['documents', docId] });
       qc.invalidateQueries({ queryKey: ['requests'] });
       qc.invalidateQueries({ queryKey: ['pendingReviewVersions'] });
+      qc.invalidateQueries({ queryKey: ['organizations'] }); 
+      qc.invalidateQueries({ queryKey: ['documents', 'my'] });
     },
   });
 }
@@ -136,10 +144,6 @@ async function sha256hex(blob) {
   return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/**
- * Waits for a DOCUMENT_RECONSTRUCTED SSE notification for the given docId.
- * Resolves with the reconstructed download URL, or rejects on timeout.
- */
 function waitForReconstructedUrl(docId, timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
     let stream;
@@ -187,7 +191,6 @@ export function useUploadVersion(docId, versions) {
     mutationFn: async ({ file, isDraft }) => {
       setUploadStep('fetching_base');
 
-      // Lazy-load WASM module
       const wasmModule = await import('../../pkg/diff_wasm.js');
       await wasmModule.default();
       const { generate_unified_diff_wasm } = wasmModule;
@@ -204,22 +207,18 @@ export function useUploadVersion(docId, versions) {
 
       if (canDiff) {
         try {
-          // Fetch base version download URL
           const { download_url } = await getVersionDownloadUrl(docId, latestVersion.id);
           let baseContent;
 
           if (download_url && String(download_url) !== '') {
-            // SNAPSHOT — immediately available
             const resp = await fetch(String(download_url));
             baseContent = await resp.text();
           } else {
-            // DIFF — wait for reconstruction via SSE
             try {
               const reconstructedUrl = await waitForReconstructedUrl(docId, 15000);
               const resp = await fetch(reconstructedUrl);
               baseContent = await resp.text();
             } catch {
-              // Timeout fallback: upload as full snapshot
               baseContent = null;
             }
           }
@@ -237,14 +236,15 @@ export function useUploadVersion(docId, versions) {
             }
           }
         } catch (err) {
-          // Non-fatal: fall back to SNAPSHOT upload
           console.warn('[useUploadVersion] diff computation failed, uploading as snapshot:', err);
         }
       }
 
       setUploadStep('uploading');
 
-      const checksum = await sha256hex(contentToUpload);
+      // IMPORTANT: Hash the full original file to satisfy the Worker verification
+      const checksum = await sha256hex(file);
+      
       const { upload_url } = await createVersion(docId, {
         checksum,
         is_draft: isDraft,
@@ -259,6 +259,8 @@ export function useUploadVersion(docId, versions) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['documents', docId, 'versions'] });
       qc.invalidateQueries({ queryKey: ['documents', docId] });
+      qc.invalidateQueries({ queryKey: ['organizations'] }); // Refreshes org document lists
+      qc.invalidateQueries({ queryKey: ['documents', 'my'] }); // Refreshes my documents list
     },
     onError: () => {
       setUploadStep('idle');

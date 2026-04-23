@@ -15,7 +15,16 @@ function primaryRole(roles) {
 }
 
 export function OrgProvider({ children }) {
-  const [selectedOrg, _setSelectedOrg] = useState(null);
+  // ПОПРАВКА: Инициализираме стейта директно от localStorage, за да оцелее след рефреш
+  const [selectedOrg, _setSelectedOrg] = useState(() => {
+    const saved = localStorage.getItem('vcs_selected_org');
+    try {
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const auth = useAuth();
 
   // Derive orgId from route when inside /organizations/:orgId/* or when viewing docs from that org
@@ -29,17 +38,25 @@ export function OrgProvider({ children }) {
     enabled: auth.isAuthenticated,
   });
 
+  // Custom setter that syncs with localStorage
+  const setSelectedOrg = (org) => {
+    if (org) {
+      localStorage.setItem('vcs_selected_org', JSON.stringify(org));
+    } else {
+      localStorage.removeItem('vcs_selected_org');
+    }
+    _setSelectedOrg(org);
+  };
+
   // If the URL contains an orgId, ensure selectedOrg is set so the
   // organization context persists when navigating away from org routes.
   useEffect(() => {
     if (routeOrgId && orgs) {
       const found = orgs.find(o => o.id === routeOrgId);
       if (found && (!selectedOrg || selectedOrg.id !== routeOrgId)) {
-        _setSelectedOrg(found);
+        setSelectedOrg(found);
       }
     }
-    // Intentionally do NOT clear selectedOrg when leaving the org route.
-    // The user must explicitly "Leave" the workspace to clear it.
   }, [routeOrgId, orgs, selectedOrg]);
 
   // Resolve the active org and roles
@@ -49,16 +66,15 @@ export function OrgProvider({ children }) {
     if (routeOrgId && orgs) {
       org = orgs.find(o => o.id === routeOrgId) || null;
     }
-    // Priority 2: Use selectedOrg if set (handles navigation outside org routes)
+    // Priority 2: Use selectedOrg from memory/localStorage (handles refresh outside org routes)
     if (!org && selectedOrg) {
       org = selectedOrg;
     }
     if (!org) return { activeOrg: null, activeRoles: [], activeRole: null };
+    
     const roles = Array.isArray(org.my_roles) ? org.my_roles : (org.my_role ? [org.my_role] : []);
     return { activeOrg: org, activeRoles: roles, activeRole: primaryRole(roles) };
   }, [selectedOrg, routeOrgId, orgs]);
-
-  const setSelectedOrg = (org) => _setSelectedOrg(org);
 
   return (
     <OrgContext.Provider value={{ selectedOrg: activeOrg, setSelectedOrg, activeRole, activeRoles }}>
@@ -66,7 +82,6 @@ export function OrgProvider({ children }) {
     </OrgContext.Provider>
   );
 }
-
 
 export function useOrg() {
   const ctx = useContext(OrgContext);

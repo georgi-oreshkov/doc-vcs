@@ -57,6 +57,12 @@ export default function DocumentViewerView() {
   const selectedVersion = versions[effectiveIndex];
   const prevVersion = effectiveIndex > 0 ? versions[effectiveIndex - 1] : null;
   const isLatest = effectiveIndex === versions.length - 1;
+  useEffect(() => {
+    setSliderIndex(null);
+  }, [versions.length]);
+
+  // ТУК Е ЗАЩИТАТА: Проверява дали има версия, която чака ревю
+  const hasPendingReview = versions.some(v => v.status === 'PENDING');
 
   // Mutation for requesting a review
   const reviewMutation = useMutation({
@@ -189,10 +195,22 @@ export default function DocumentViewerView() {
           {/* Prevent slider rendering if there is only 1 version */}
           {versions.length > 1 ? (
             <Slider
-              step={1} maxValue={versions.length - 1} minValue={0}
-              value={effectiveIndex} onChange={setSliderIndex}
-              color="primary" showSteps={true}
-              marks={versions.map(v => ({ value: v.value, label: v.label }))}
+              step={1} 
+              maxValue={versions.length - 1} 
+              minValue={0}
+              value={effectiveIndex} 
+              onChange={setSliderIndex}
+              color="primary" 
+              showSteps={versions.length <= 20} 
+              marks={
+                versions.length <= 10 
+                  ? // If 10 or fewer versions, show all of them
+                    versions.map(v => ({ value: v.value, label: v.label }))
+                  : // If more than 10, apply the interval filter
+                    versions
+                      .filter((v, i) => i === 0 || i === versions.length - 1 || v.version_number % 10 === 0)
+                      .map(v => ({ value: v.value, label: v.label }))
+              }
               className="max-w-md"
             />
           ) : (
@@ -255,13 +273,13 @@ export default function DocumentViewerView() {
             </div>
           )}
           
-          {selectedVersion?.status === 'DRAFT' && (
+          {isLatest && selectedVersion?.status === 'DRAFT' && (
             <Button color="secondary" startContent={<Send size={16} />} onPress={() => reviewMutation.mutate()} isLoading={reviewMutation.isPending}>
               Request Review
             </Button>
           )}
 
-          {selectedVersion?.status === 'PENDING' && isReviewer && (
+          {isLatest && selectedVersion?.status === 'PENDING' && isReviewer && (
             <>
               <Button color="success" variant="flat" startContent={<CheckCircle size={16} />} onPress={handleApprove} isLoading={approveVersion.isPending}>
                 Approve
@@ -275,9 +293,25 @@ export default function DocumentViewerView() {
           <Button variant="bordered" className="border-zinc-700 text-zinc-300" startContent={<Download size={18} />} onPress={handleDownload}>Download</Button>
 
           {isLatest ? (
-            <Button color="primary" startContent={<UploadCloud size={18} />} onPress={onNewVersionOpen}>New Version</Button>
+            <Button 
+              color="primary" 
+              startContent={<UploadCloud size={18} />} 
+              onPress={onNewVersionOpen}
+              isDisabled={hasPendingReview} // ТУК Е ЗАЩИТАТА
+            >
+              New Version
+            </Button>
           ) : (
-            <Button color="warning" variant="flat" startContent={<RotateCcw size={18} />} onPress={() => rollback.mutate({ docId, versionId: selectedVersion.id })} isLoading={rollback.isPending}>Rollback</Button>
+            <Button 
+              color="warning" 
+              variant="flat" 
+              startContent={<RotateCcw size={18} />} 
+              onPress={() => rollback.mutate({ docId, versionId: selectedVersion.id })} 
+              isLoading={rollback.isPending}
+              isDisabled={hasPendingReview} // ТУК Е ЗАЩИТАТА
+            >
+              Rollback
+            </Button>
           )}
         </div>
       </div>
@@ -327,12 +361,21 @@ export default function DocumentViewerView() {
               placeholder="Explain why this version is being rejected..."
               value={rejectReason}
               onValueChange={setRejectReason}
-              classNames={{ input: 'text-white', label: 'text-zinc-400' }}
+              variant="bordered"
+              classNames={{ 
+                input: 'text-white',
+                label: 'text-zinc-400',
+                inputWrapper: '!bg-transparent border-white hover:border-lime-500 data-[focus=true]:border-lime-500'
+             }}
               minRows={3}
             />
           </ModalBody>
           <ModalFooter>
-            <Button variant="flat" onPress={() => setShowRejectModal(false)}>Cancel</Button>
+            <Button 
+            color="primary" variant="light"
+            onPress={() => setShowRejectModal(false)}>
+              Cancel
+            </Button>
             <Button color="danger" onPress={handleRejectConfirm} isLoading={rejectVersion.isPending}>Reject</Button>
           </ModalFooter>
         </ModalContent>

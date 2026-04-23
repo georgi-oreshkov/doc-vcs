@@ -65,11 +65,16 @@ export default function NotificationsView() {
       setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, readAt: new Date().toISOString() } : n));
     }
     
-    const orgId = payload.organizationId || payload.orgId || payload.organization_id;
-    const docId = payload.documentId || payload.docId || payload.document_id;
+    // ПОПРАВКА: Покриваме абсолютно всички възможни формати на ключове, които бекендът може да върне
+    const orgId = payload.organizationId || payload.orgId || payload.organization_id || payload.organizationid || payload.org_id;
+    const docId = payload.documentId || payload.docId || payload.document_id || payload.documentid || payload.doc_id;
 
     if (docId && orgId) {
       navigate(`/organizations/${orgId}/documents/${docId}`);
+    } else if (docId) {
+      navigate(`/documents/${docId}`);
+    } else if (orgId) {
+      navigate(`/organizations/${orgId}`);
     }
   };
 

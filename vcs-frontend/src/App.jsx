@@ -43,7 +43,10 @@ export default function App() {
           <Route path="/" element={<AuthRedirect><LandingView /></AuthRedirect>} />
           <Route path="/organizations" element={<ProtectedRoute><OrganizationsView /></ProtectedRoute>} />
           <Route path="/organizations/:orgId/documents" element={<ProtectedRoute><DocumentsView /></ProtectedRoute>} />
+          {/* ПОПРАВКА: Добавен е пълният маршрут за документ в рамките на организация! */}
+          <Route path="/organizations/:orgId/documents/:docId" element={<ProtectedRoute><DocumentViewerView /></ProtectedRoute>} />
           <Route path="/organizations/:orgId/admin" element={<ProtectedRoute><AdminPanelView /></ProtectedRoute>} />
+          
           <Route path="/documents/my" element={<ProtectedRoute><DocumentsView myDocs /></ProtectedRoute>} />
           <Route path="/documents/:docId" element={<ProtectedRoute><DocumentViewerView /></ProtectedRoute>} />
           <Route path="/reviews" element={<ProtectedRoute><ReviewerView /></ProtectedRoute>} />
