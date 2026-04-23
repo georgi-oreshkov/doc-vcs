@@ -39,6 +39,15 @@ public class VersionEntity extends BaseEntity {
     @Column(nullable = false)
     private Boolean isDraft;
 
+    /**
+     * True from the moment a version is created until the file is confirmed in S3.
+     * Cleared by the MinIO webhook for SNAPSHOT versions, or by the worker for DIFF versions.
+     * While true: download, new-version upload, and review-request are all blocked.
+     */
+    @Column(name = "is_uploading", nullable = false)
+    @Builder.Default
+    private Boolean isUploading = true;
+
     /** SHA-256 (or similar) of the uploaded file content. */
     @Column
     private String checksum;

@@ -40,6 +40,10 @@ public class MinioWebhookController {
     private static final Pattern STAGING_DIFF_KEY =
             Pattern.compile("^tmp/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/v(\\d+)\\.diff$");
 
+    // Matches: documents/{uuid}/v{int}  — permanent snapshot upload
+    private static final Pattern SNAPSHOT_KEY =
+            Pattern.compile("^documents/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/v(\\d+)$");
+
     private final VersionService versionService;
     private final JsonMapper jsonMapper;
 
@@ -80,14 +84,25 @@ public class MinioWebhookController {
                 if (rawKey == null || rawKey.isBlank()) continue;
 
                 String key = URLDecoder.decode(rawKey, StandardCharsets.UTF_8);
-                Matcher matcher = STAGING_DIFF_KEY.matcher(key);
-                if (!matcher.matches()) continue;
 
-                UUID docId = UUID.fromString(matcher.group(1));
-                int versionNumber = Integer.parseInt(matcher.group(2));
+                // Staging diff uploaded — dispatch VERIFY_DIFF worker task
+                Matcher diffMatcher = STAGING_DIFF_KEY.matcher(key);
+                if (diffMatcher.matches()) {
+                    UUID docId = UUID.fromString(diffMatcher.group(1));
+                    int versionNumber = Integer.parseInt(diffMatcher.group(2));
+                    log.debug("Staging diff uploaded: docId={}, versionNumber={}", docId, versionNumber);
+                    versionService.handleStagingDiffUploaded(docId, versionNumber);
+                    continue;
+                }
 
-                log.debug("Staging diff uploaded: docId={}, versionNumber={}", docId, versionNumber);
-                versionService.handleStagingDiffUploaded(docId, versionNumber);
+                // Permanent snapshot uploaded — clear isUploading flag
+                Matcher snapshotMatcher = SNAPSHOT_KEY.matcher(key);
+                if (snapshotMatcher.matches()) {
+                    UUID docId = UUID.fromString(snapshotMatcher.group(1));
+                    int versionNumber = Integer.parseInt(snapshotMatcher.group(2));
+                    log.debug("Snapshot uploaded: docId={}, versionNumber={}", docId, versionNumber);
+                    versionService.handleSnapshotUploaded(docId, versionNumber);
+                }
             }
         } catch (Exception e) {
             log.error("Failed to process MinIO webhook body", e);

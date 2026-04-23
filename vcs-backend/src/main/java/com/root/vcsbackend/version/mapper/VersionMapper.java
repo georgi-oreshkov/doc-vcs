@@ -25,6 +25,7 @@ public interface VersionMapper {
     @Mapping(target = "createdAt", source = "createdAt", qualifiedByName = "instantToOffsetDateTime")
     @Mapping(target = "storageType", source = "storageType", qualifiedByName = "storageTypeToApi")
     @Mapping(target = "diffPreview", source = "diffPreview")
+    @Mapping(target = "isUploading", source = "isUploading")
     Version toDto(VersionEntity entity);
 
     @Mapping(target = "id", ignore = true)
@@ -33,6 +34,7 @@ public interface VersionMapper {
     @Mapping(target = "isDraft", source = "req.isDraft")
     @Mapping(target = "checksum", source = "req.checksum")
     @Mapping(target = "status", constant = "DRAFT")
+    @Mapping(target = "isUploading", constant = "true")
     @Mapping(target = "storageType", source = "req.isDiff", qualifiedByName = "isDiffToStorageType")
     @Mapping(target = "diffPreview", source = "req.diffPreview")
     @Mapping(target = "createdAt", ignore = true)

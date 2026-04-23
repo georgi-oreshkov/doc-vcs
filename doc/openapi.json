@@ -299,7 +299,8 @@
           "version_number",
           "status",
           "is_draft",
-          "created_at"
+          "created_at",
+          "is_uploading"
         ],
         "properties": {
           "id": {
@@ -342,6 +343,10 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "is_uploading": {
+            "type": "boolean",
+            "description": "True while the file upload to S3 is in progress. Cleared by the MinIO webhook (SNAPSHOT) or the worker (DIFF). While true, download, new-version upload, and review-request are blocked."
           }
         }
       },
@@ -1674,9 +1679,9 @@
               }
             }
           },
-          "202" : {
+          "202": {
             "description": "Wait for notification with download URL",
-            "content" : {}
+            "content": {}
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"

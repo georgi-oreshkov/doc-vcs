@@ -62,6 +62,14 @@ public class VersionService {
     public S3UploadResponse createVersion(UUID docId, CreateVersionRequest req, UUID callerId) {
         documentFacade.requireExists(docId);
 
+        // Block upload if the current latest version is still uploading
+        versionRepository.findTopByDocIdOrderByVersionNumberDesc(docId).ifPresent(latest -> {
+            if (Boolean.TRUE.equals(latest.getIsUploading())) {
+                throw new AppException(HttpStatus.CONFLICT,
+                    "Cannot upload a new version: the previous version upload is still in progress.");
+            }
+        });
+
         int nextNumber = versionRepository.findTopByDocIdOrderByVersionNumberDesc(docId)
             .map(v -> v.getVersionNumber() + 1)
             .orElse(1);
@@ -91,6 +99,9 @@ public class VersionService {
     @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
     public void requestReview(UUID docId, UUID versionId, UUID callerId) {
         VersionEntity version = resolveAndValidate(docId, versionId);
+        if (Boolean.TRUE.equals(version.getIsUploading())) {
+            throw new AppException(HttpStatus.CONFLICT, "Cannot request review: file upload is still in progress.");
+        }
         if (version.getStatus() != VersionStatus.DRAFT) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Only DRAFT versions can be submitted for review.");
         }
@@ -224,10 +235,28 @@ public class VersionService {
                         .expectedChecksum(version.getChecksum()).newVersionNumber(versionNumber).build());
     }
 
+    /**
+     * Called by MinioWebhookController when a SNAPSHOT version file lands in the permanent key.
+     * Clears the isUploading flag so users can download and request review.
+     */
+    @Transactional
+    public void handleSnapshotUploaded(UUID docId, int versionNumber) {
+        versionRepository.findByDocIdAndVersionNumber(docId, versionNumber).ifPresent(version -> {
+            if (version.getStorageType() == StorageType.SNAPSHOT) {
+                version.setIsUploading(false);
+                versionRepository.save(version);
+                log.debug("Snapshot upload confirmed: docId={}, versionNumber={}", docId, versionNumber);
+            }
+        });
+    }
+
     @Transactional(readOnly = true)
     @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
     public DownloadUrlResult getDownloadUrl(UUID docId, UUID versionId, UUID callerId) {
         VersionEntity version = resolveAndValidate(docId, versionId);
+        if (Boolean.TRUE.equals(version.getIsUploading())) {
+            throw new AppException(HttpStatus.CONFLICT, "File upload is still in progress. Please try again shortly.");
+        }
         boolean reconstructionDispatched = version.getStorageType() == StorageType.DIFF;
         if (reconstructionDispatched) {
             diffTaskPublisher.publish(ReconstructTaskMessage.builder()

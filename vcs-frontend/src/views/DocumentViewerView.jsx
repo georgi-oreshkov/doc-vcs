@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, Slider, ButtonGroup, Spinner, useDisclosure, addToast, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Textarea, Select, SelectItem, Chip } from "@heroui/react";
-import { ArrowLeft, History, Download, UploadCloud, RotateCcw, Columns, AlignLeft, Send, CheckCircle, XCircle } from 'lucide-react';
+import { ArrowLeft, History, Download, UploadCloud, RotateCcw, Columns, AlignLeft, Send, CheckCircle, XCircle, Loader } from 'lucide-react';
 import { useDocument, useUpdateDocument } from '../hooks/useDocuments';
 import { useVersions, useDiff, useRollbackVersion, useApproveVersion, useRejectVersion } from '../hooks/useVersions';
 import { formatVersionNumber } from '../api/transforms';
@@ -57,6 +57,7 @@ export default function DocumentViewerView() {
   const selectedVersion = versions[effectiveIndex];
   const prevVersion = effectiveIndex > 0 ? versions[effectiveIndex - 1] : null;
   const isLatest = effectiveIndex === versions.length - 1;
+  const isUploading = selectedVersion?.is_uploading === true;
   useEffect(() => {
     setSliderIndex(null);
   }, [versions.length]);
@@ -263,23 +264,28 @@ export default function DocumentViewerView() {
             <div className="text-right mr-4 hidden sm:block">
               <div className="text-sm font-bold text-white flex items-center gap-2 justify-end">
                 Viewing: {selectedVersion.label}
-                {selectedVersion.status === 'DRAFT' && (
+                {isUploading && (
+                  <span className="bg-blue-500/20 text-blue-400 text-[10px] px-2 py-0.5 rounded uppercase flex items-center gap-1">
+                    <Loader size={10} className="animate-spin" /> Uploading
+                  </span>
+                )}
+                {!isUploading && selectedVersion.status === 'DRAFT' && (
                   <span className="bg-default-500/20 text-default-400 text-[10px] px-2 py-0.5 rounded uppercase">Draft</span>
                 )}
-                {selectedVersion.status === 'PENDING' && (
+                {!isUploading && selectedVersion.status === 'PENDING' && (
                   <span className="bg-warning-500/20 text-warning-400 text-[10px] px-2 py-0.5 rounded uppercase">Reviewing</span>
                 )}
               </div>
             </div>
           )}
-          
-          {isLatest && selectedVersion?.status === 'DRAFT' && (
+
+          {isLatest && !isUploading && selectedVersion?.status === 'DRAFT' && (
             <Button color="secondary" startContent={<Send size={16} />} onPress={() => reviewMutation.mutate()} isLoading={reviewMutation.isPending}>
               Request Review
             </Button>
           )}
 
-          {isLatest && selectedVersion?.status === 'PENDING' && isReviewer && (
+          {isLatest && !isUploading && selectedVersion?.status === 'PENDING' && isReviewer && (
             <>
               <Button color="success" variant="flat" startContent={<CheckCircle size={16} />} onPress={handleApprove} isLoading={approveVersion.isPending}>
                 Approve
@@ -290,14 +296,14 @@ export default function DocumentViewerView() {
             </>
           )}
 
-          <Button variant="bordered" className="border-zinc-700 text-zinc-300" startContent={<Download size={18} />} onPress={handleDownload}>Download</Button>
+          <Button variant="bordered" className="border-zinc-700 text-zinc-300" startContent={<Download size={18} />} onPress={handleDownload} isDisabled={isUploading}>Download</Button>
 
           {isLatest ? (
-            <Button 
-              color="primary" 
-              startContent={<UploadCloud size={18} />} 
+            <Button
+              color="primary"
+              startContent={<UploadCloud size={18} />}
               onPress={onNewVersionOpen}
-              isDisabled={hasPendingReview} // ТУК Е ЗАЩИТАТА
+              isDisabled={isUploading}
             >
               New Version
             </Button>
