@@ -8,3 +8,5 @@
 - [RESOLVED] download isnt wired properly, should call the internal browsers download function to save to a file.
 - [RESOLVED] deleteing organization results in error 500, but deletion is successful.
 - [RESOLVED] readers shouldn't be able to see drafts and pending documents, only approoved
+
+- category selector doesnt get updated on the timeline, always says none until a suer changes it, the after refresh, none again.

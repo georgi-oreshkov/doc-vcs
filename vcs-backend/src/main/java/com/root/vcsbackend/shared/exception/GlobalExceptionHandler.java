@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import java.time.OffsetDateTime;
 import java.util.stream.Collectors;
 
@@ -43,6 +44,10 @@ public class GlobalExceptionHandler {
     /** Catch-all for unexpected exceptions — avoids leaking stack traces. */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, HttpServletResponse response) {
+        // SSE connections broken by client disconnect — not an application error, ignore silently.
+        if (ex instanceof AsyncRequestNotUsableException) {
+            return null;
+        }
         log.error("Unhandled exception", ex);
         if (!response.isCommitted()) response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         ErrorResponse body = new ErrorResponse(
