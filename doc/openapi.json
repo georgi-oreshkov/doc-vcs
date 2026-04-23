@@ -269,6 +269,13 @@
               "null"
             ],
             "format": "uuid"
+          },
+          "reviewer_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         }
       },
@@ -283,7 +290,7 @@
             "format": "uuid"
           },
           "reviewer_ids": {
-            "type": "array",
+            "type": ["array", "null"],
             "items": {
               "type": "string",
               "format": "uuid"

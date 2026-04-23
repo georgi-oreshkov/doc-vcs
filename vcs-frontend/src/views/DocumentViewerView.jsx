@@ -8,6 +8,7 @@ import { formatVersionNumber } from '../api/transforms';
 import { getVersionDownloadUrl, requestReview } from '../api/versionsApi';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useOrg } from '../context/OrgContext';
+import { useAuth } from 'react-oidc-context';
 import NewVersionModal from '../components/NewVersionModal';
 import CommentsPanel from '../components/CommentsPanel';
 import { useCategories } from '../hooks/useCategories';
@@ -27,8 +28,10 @@ export default function DocumentViewerView() {
   const [showRejectModal, setShowRejectModal] = useState(false);
 
   const { activeRoles } = useOrg();
-  const isReviewer = activeRoles.includes('REVIEWER') || activeRoles.includes('ADMIN');
-  const canEditCategory = activeRoles.includes('ADMIN') || activeRoles.includes('AUTHOR');
+  const auth = useAuth();
+  const currentUserId = auth?.user?.profile?.sub;
+  const isAdmin = activeRoles.includes('ADMIN');
+  const canEditCategory = isAdmin || activeRoles.includes('AUTHOR');
 
   const { data: doc, isLoading: docLoading } = useDocument(docId);
   const { data: categoriesData = [] } = useCategories(doc?.org_id ?? null);
@@ -64,6 +67,12 @@ export default function DocumentViewerView() {
 
   // ТУК Е ЗАЩИТАТА: Проверява дали има версия, която чака ревю
   const hasPendingReview = versions.some(v => v.status === 'PENDING');
+
+  // Author-or-admin: may upload new versions and request review
+  const isAuthorOrAdmin = isAdmin || doc?.author_id === currentUserId;
+  // Assigned-reviewer-or-admin: may approve/reject
+  const isAssignedReviewerOrAdmin = isAdmin ||
+    (activeRoles.includes('REVIEWER') && Array.isArray(doc?.reviewer_ids) && doc.reviewer_ids.includes(currentUserId));
 
   // Mutation for requesting a review
   const reviewMutation = useMutation({
@@ -287,13 +296,13 @@ export default function DocumentViewerView() {
             </div>
           )}
 
-          {isLatest && !isUploading && selectedVersion?.status === 'DRAFT' && (
+          {isLatest && !isUploading && selectedVersion?.status === 'DRAFT' && isAuthorOrAdmin && (
             <Button color="secondary" startContent={<Send size={16} />} onPress={() => reviewMutation.mutate()} isLoading={reviewMutation.isPending}>
               Request Review
             </Button>
           )}
 
-          {isLatest && !isUploading && selectedVersion?.status === 'PENDING' && isReviewer && (
+          {isLatest && !isUploading && selectedVersion?.status === 'PENDING' && isAssignedReviewerOrAdmin && (
             <>
               <Button color="success" variant="flat" startContent={<CheckCircle size={16} />} onPress={handleApprove} isLoading={approveVersion.isPending}>
                 Approve
@@ -307,6 +316,7 @@ export default function DocumentViewerView() {
           <Button variant="bordered" className="border-zinc-700 text-zinc-300" startContent={<Download size={18} />} onPress={handleDownload} isDisabled={isUploading}>Download</Button>
 
           {isLatest ? (
+            isAuthorOrAdmin && (
             <Button
               color="primary"
               startContent={<UploadCloud size={18} />}
@@ -315,6 +325,7 @@ export default function DocumentViewerView() {
             >
               New Version
             </Button>
+            )
           ) : (
             <Button 
               color="warning" 

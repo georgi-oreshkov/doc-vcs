@@ -96,6 +96,9 @@ public class DocumentService {
     public DocumentEntity updateDocument(UUID docId, CreateDocumentRequest req) {
         DocumentEntity doc = getDocumentInternal(docId);
         documentMapper.applyUpdate(req, doc);
+        if (req.getReviewerIds() != null) {
+            doc.setReviewerIds(req.getReviewerIds());
+        }
         return documentRepository.save(doc);
     }
 
