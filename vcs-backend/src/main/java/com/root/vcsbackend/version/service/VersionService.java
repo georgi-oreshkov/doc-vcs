@@ -255,6 +255,21 @@ public class VersionService {
         });
     }
 
+    /**
+     * Called by PostgresNotificationListener when a DIFF_VERIFIED notification arrives.
+     * Clears the isUploading flag for the diff version so users can download and request review.
+     */
+    @Transactional
+    public void handleDiffVerified(UUID docId, int versionNumber) {
+        versionRepository.findByDocIdAndVersionNumber(docId, versionNumber).ifPresent(version -> {
+            if (version.getStorageType() == StorageType.DIFF) {
+                version.setIsUploading(false);
+                versionRepository.save(version);
+                log.debug("Diff verification confirmed: docId={}, versionNumber={}", docId, versionNumber);
+            }
+        });
+    }
+
     @Transactional(readOnly = true)
     @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
     public DownloadUrlResult getDownloadUrl(UUID docId, UUID versionId, UUID callerId) {

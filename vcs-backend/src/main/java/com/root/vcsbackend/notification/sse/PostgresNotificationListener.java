@@ -1,12 +1,15 @@
 package com.root.vcsbackend.notification.sse;
 
 import com.root.vcsbackend.notification.domain.NotificationDto;
+import com.root.vcsbackend.version.service.VersionService;
 import lombok.extern.slf4j.Slf4j;
 import org.postgresql.PGConnection;
 import org.postgresql.PGNotification;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -49,6 +52,13 @@ public class PostgresNotificationListener implements InitializingBean, Disposabl
     private final String jdbcUrl;
     private final String dbUser;
     private final String dbPassword;
+
+    private VersionService versionService;
+
+    @Autowired
+    public void setVersionService(@Lazy VersionService versionService) {
+        this.versionService = versionService;
+    }
 
     private volatile Connection listenConnection;
     private volatile boolean    running = true;
@@ -121,11 +131,21 @@ public class PostgresNotificationListener implements InitializingBean, Disposabl
         try {
             JsonNode node = jsonMapper.readTree(json);
             UUID recipientId = UUID.fromString(node.get("recipientId").asString());
+            String type = node.get("type").asString();
+
+            if ("DIFF_VERIFIED".equals(type)) {
+                JsonNode payload = node.get("payload");
+                if (payload != null && !payload.isNull()) {
+                    UUID docId = UUID.fromString(payload.get("docId").asString());
+                    int versionNumber = payload.get("version").intValue();
+                    versionService.handleDiffVerified(docId, versionNumber);
+                }
+            }
 
             NotificationDto dto = new NotificationDto(
                     UUID.fromString(node.get("id").asString()),
                     recipientId,
-                    node.get("type").asString(),
+                    type,
                     node.has("payload") && !node.get("payload").isNull()
                             ? node.get("payload").toString() : null,
                     Instant.parse(node.get("createdAt").asString()),
