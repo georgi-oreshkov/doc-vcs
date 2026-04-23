@@ -227,6 +227,7 @@ CREATE TABLE versions (
     status          VARCHAR(50) NOT NULL DEFAULT 'PENDING'
                     CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),  -- [2][9] removed 'draft'
     is_draft        BOOLEAN     NOT NULL DEFAULT TRUE,                  -- [9] new: replaces 'draft' status
+    is_uploading    BOOLEAN     NOT NULL DEFAULT FALSE,                 -- true until S3 upload confirmed
     checksum        VARCHAR(128),                                       -- [9] new: file integrity
     s3_key          VARCHAR(1024) NOT NULL,                             -- [9] was: s3_location
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
