@@ -94,6 +94,24 @@ services:
       db:
         condition: service_healthy
 
+  minio-setup:
+    image: minio/mc:latest
+    container_name: minio-setup
+    restart: "no"
+    environment:
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${S3_BUCKET:-vcs-documents}
+    volumes:
+      - ./scripts/minio_setup.sh:/minio_setup.sh:ro
+    networks:
+      - docvcs
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["sh", "/minio_setup.sh"]
+
   vcs-backend:
     image: ghcr.io/georgi-oreshkov/doc-vcs/vcs-backend:latest
     build:
