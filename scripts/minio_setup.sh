@@ -25,10 +25,19 @@ echo "→ Removing existing webhook event filter (if any)..."
   --prefix "tmp/" \
   --suffix ".diff" 2>/dev/null || true
 
-echo "→ Binding webhook event filter (PUT on tmp/*.diff)..."
+"$MC" event remove "$ALIAS/$BUCKET" "$ARN" \
+  --event put \
+  --prefix "documents/" 2>/dev/null || true
+
+echo "→ Binding webhook event filter (PUT on tmp/*.diff — staging diffs)..."
 "$MC" event add "$ALIAS/$BUCKET" "$ARN" \
   --event put \
   --prefix "tmp/" \
   --suffix ".diff"
+
+echo "→ Binding webhook event filter (PUT on documents/ — snapshot uploads)..."
+"$MC" event add "$ALIAS/$BUCKET" "$ARN" \
+  --event put \
+  --prefix "documents/"
 
 echo "✓ MinIO setup complete."
