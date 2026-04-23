@@ -35,7 +35,7 @@ public interface DocumentMapper {
     @Mapping(target = "authorId", source = "authorId")
     @Mapping(target = "name", source = "req.name")
     @Mapping(target = "categoryId", source = "req.categoryId")
-    @Mapping(target = "reviewerIds", source = "req.reviewerIds")
+    @Mapping(target = "reviewerIds", source = "req.reviewerIds", qualifiedByName = "jsonNullableToUuidList")
     @Mapping(target = "status", constant = "DRAFT")
     @Mapping(target = "latestVersionId", ignore = true)
     @Mapping(target = "latestApprovedVersionId", ignore = true)

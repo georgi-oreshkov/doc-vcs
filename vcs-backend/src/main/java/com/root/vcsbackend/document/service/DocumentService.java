@@ -26,8 +26,10 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.openapitools.jackson.nullable.JsonNullable;
 
 @Service
 @Transactional
@@ -96,8 +98,9 @@ public class DocumentService {
     public DocumentEntity updateDocument(UUID docId, CreateDocumentRequest req) {
         DocumentEntity doc = getDocumentInternal(docId);
         documentMapper.applyUpdate(req, doc);
-        if (req.getReviewerIds() != null) {
-            doc.setReviewerIds(req.getReviewerIds());
+        JsonNullable<List<UUID>> reviewerIdsNullable = req.getReviewerIds();
+        if (reviewerIdsNullable != null && reviewerIdsNullable.isPresent()) {
+            doc.setReviewerIds(reviewerIdsNullable.get() != null ? reviewerIdsNullable.get() : new ArrayList<>());
         }
         return documentRepository.save(doc);
     }

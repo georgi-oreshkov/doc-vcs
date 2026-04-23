@@ -8,6 +8,8 @@ import java.net.URI;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -27,6 +29,14 @@ public interface JsonNullableMapper {
     @Named("jsonNullableToUuid")
     default UUID jsonNullableToUuid(JsonNullable<UUID> nullable) {
         return (nullable != null && nullable.isPresent()) ? nullable.get() : null;
+    }
+
+    /** Extracts a List<UUID> from JsonNullable<List<UUID>>, returning empty list if undefined or null. */
+    @Named("jsonNullableToUuidList")
+    default List<UUID> jsonNullableToUuidList(JsonNullable<List<UUID>> nullable) {
+        return (nullable != null && nullable.isPresent() && nullable.get() != null)
+            ? new ArrayList<>(nullable.get())
+            : new ArrayList<>();
     }
 
     /** Converts a stored URI string to JsonNullable<URI>, undefined when null. */
