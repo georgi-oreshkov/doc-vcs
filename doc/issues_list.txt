@@ -10,3 +10,6 @@
 - [RESOLVED] readers shouldn't be able to see drafts and pending documents, only approoved
 
 - category selector doesnt get updated on the timeline, always says none until a suer changes it, the after refresh, none again.
+- if i have two users that are authors in my org, they can upload new versions on the other users's documents. they can also request a review.
+- speaking on security leaks reviewers still can review documents they are not asigned to. thats bad
+- version preview is empty when i rollback a document, seems rollback was quite broken.

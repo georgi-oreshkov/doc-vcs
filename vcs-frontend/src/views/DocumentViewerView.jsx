@@ -242,7 +242,10 @@ export default function DocumentViewerView() {
                     setSelectedCategoryKeys(val ? new Set([val]) : new Set([]));
                     updateDocument.mutate(
                       { docId, data: { category_id: val } },
-                      { onSuccess: () => addToast({ title: 'Category updated', color: 'success' }) }
+                      {
+                        onSuccess: () => addToast({ title: 'Category updated', color: 'success' }),
+                        onError: (err) => addToast({ title: 'Category update failed', description: err?.message, color: 'danger' }),
+                      }
                     );
                   }}
                   classNames={{ trigger: "border-zinc-700 bg-zinc-900/50 h-8 min-h-8", value: "text-zinc-300 text-xs" }}
@@ -317,7 +320,15 @@ export default function DocumentViewerView() {
               color="warning" 
               variant="flat" 
               startContent={<RotateCcw size={18} />} 
-              onPress={() => rollback.mutate({ docId, versionId: selectedVersion.id })} 
+              onPress={() => rollback.mutate(
+                { docId, versionId: selectedVersion.id },
+                {
+                  onError: (err) => {
+                    const msg = err?.response?.data?.message ?? err?.message;
+                    addToast({ title: 'Rollback not ready', description: msg, color: 'warning' });
+                  }
+                }
+              )}
               isLoading={rollback.isPending}
               isDisabled={hasPendingReview} // ТУК Е ЗАЩИТАТА
             >

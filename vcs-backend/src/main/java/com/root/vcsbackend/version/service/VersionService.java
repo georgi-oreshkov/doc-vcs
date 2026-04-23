@@ -67,6 +67,14 @@ public class VersionService {
     public S3UploadResponse createVersion(UUID docId, CreateVersionRequest req, UUID callerId) {
         documentFacade.requireExists(docId);
 
+        UUID docAuthorId = documentFacade.getAuthorId(docId);
+        UUID versionOrgId = documentFacade.resolveOrgId(docId);
+        List<String> uploaderRoles = orgRoleLookup.findRoles(versionOrgId, callerId);
+        if (!docAuthorId.equals(callerId) && !uploaderRoles.contains("ADMIN")) {
+            throw new AppException(HttpStatus.FORBIDDEN,
+                "Only the document author or an org admin may upload a new version.");
+        }
+
         // Block upload if the current latest version is still uploading
         versionRepository.findTopByDocIdOrderByVersionNumberDesc(docId).ifPresent(latest -> {
             if (Boolean.TRUE.equals(latest.getIsUploading())) {
@@ -104,6 +112,15 @@ public class VersionService {
     @PreAuthorize("@orgRoleEvaluator.isDocumentMember(#docId, authentication)")
     public void requestReview(UUID docId, UUID versionId, UUID callerId) {
         VersionEntity version = resolveAndValidate(docId, versionId);
+
+        UUID docAuthorId = documentFacade.getAuthorId(docId);
+        UUID reviewOrgId = documentFacade.resolveOrgId(docId);
+        List<String> requesterRoles = orgRoleLookup.findRoles(reviewOrgId, callerId);
+        if (!docAuthorId.equals(callerId) && !requesterRoles.contains("ADMIN")) {
+            throw new AppException(HttpStatus.FORBIDDEN,
+                "Only the document author or an org admin may request a review.");
+        }
+
         if (Boolean.TRUE.equals(version.getIsUploading())) {
             throw new AppException(HttpStatus.CONFLICT, "Cannot request review: file upload is still in progress.");
         }
@@ -178,7 +195,14 @@ public class VersionService {
         }
         
         UUID orgId = documentFacade.resolveOrgId(docId);
-        requireRole(orgId, callerId, "REVIEWER", "ADMIN");
+        List<String> approverRoles = orgRoleLookup.findRoles(orgId, callerId);
+        boolean isApproverAdmin = approverRoles.contains("ADMIN");
+        boolean isAssignedReviewerForApprove = approverRoles.contains("REVIEWER")
+            && documentFacade.getReviewerIds(docId).contains(callerId);
+        if (!isApproverAdmin && !isAssignedReviewerForApprove) {
+            throw new AppException(HttpStatus.FORBIDDEN,
+                "Only an assigned reviewer or an admin may approve this version.");
+        }
 
         version.setStatus(VersionStatus.APPROVED);
         version.setIsDraft(false);
@@ -199,7 +223,14 @@ public class VersionService {
         }
         
         UUID orgId = documentFacade.resolveOrgId(docId);
-        requireRole(orgId, callerId, "REVIEWER", "ADMIN");
+        List<String> rejecterRoles = orgRoleLookup.findRoles(orgId, callerId);
+        boolean isRejecterAdmin = rejecterRoles.contains("ADMIN");
+        boolean isAssignedReviewerForReject = rejecterRoles.contains("REVIEWER")
+            && documentFacade.getReviewerIds(docId).contains(callerId);
+        if (!isRejecterAdmin && !isAssignedReviewerForReject) {
+            throw new AppException(HttpStatus.FORBIDDEN,
+                "Only an assigned reviewer or an admin may reject this version.");
+        }
 
         version.setStatus(VersionStatus.REJECTED);
         versionRepository.save(version);
@@ -309,6 +340,24 @@ public class VersionService {
     public VersionEntity rollbackVersion(UUID docId, UUID targetVersionId, UUID callerId) {
         VersionEntity target = resolveAndValidate(docId, targetVersionId);
         requireRole(documentFacade.resolveOrgId(docId), callerId, "AUTHOR", "ADMIN");
+
+        if (target.getStorageType() == StorageType.DIFF) {
+            String permanentKey = S3KeyTemplates.permanentVersion(docId, target.getVersionNumber());
+            if (!s3KeyExists(permanentKey)) {
+                diffTaskPublisher.publish(ReconstructTaskMessage.builder()
+                    .taskType(WorkerTaskType.RECONSTRUCT_DOCUMENT)
+                    .docId(docId)
+                    .versionId(targetVersionId)
+                    .recipientId(callerId)
+                    .expectedChecksum(target.getChecksum())
+                    .targetVersionNumber(target.getVersionNumber())
+                    .build());
+                throw new AppException(HttpStatus.CONFLICT,
+                    "Target version has not been reconstructed yet. " +
+                    "Reconstruction has been queued — please retry in a moment.");
+            }
+        }
+
         int nextNumber = versionRepository.findTopByDocIdOrderByVersionNumberDesc(docId).map(v -> v.getVersionNumber() + 1).orElse(1);
         s3Client.copyObject(CopyObjectRequest.builder()
             .sourceBucket(s3Properties.bucket())
@@ -318,9 +367,18 @@ public class VersionService {
             .build());
         VersionEntity rollback = versionRepository.save(VersionEntity.builder()
             .docId(docId).versionNumber(nextNumber).status(VersionStatus.DRAFT).isDraft(true)
-            .isUploading(false).checksum(target.getChecksum()).storageType(target.getStorageType()).build());
+            .isUploading(false).checksum(target.getChecksum()).storageType(StorageType.SNAPSHOT).build());
         documentFacade.updateLatestVersionId(docId, rollback.getId());
         return rollback;
+    }
+
+    private boolean s3KeyExists(String key) {
+        try {
+            s3Client.headObject(b -> b.bucket(s3Properties.bucket()).key(key));
+            return true;
+        } catch (software.amazon.awssdk.services.s3.model.NoSuchKeyException e) {
+            return false;
+        }
     }
 
     private String presignOrReconstruct(UUID docId, VersionEntity version, UUID callerId) {

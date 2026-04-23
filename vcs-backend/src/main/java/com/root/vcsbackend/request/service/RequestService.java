@@ -72,8 +72,12 @@ public class RequestService {
         }
 
         UUID orgId = documentFacade.resolveOrgId(request.getDocId());
-        if (!organizationFacade.hasRole(orgId, callerId, "ADMIN", "AUTHOR", "REVIEWER")) {
-            throw new AppException(HttpStatus.FORBIDDEN, "Not authorized to action requests");
+        boolean isActionAdmin = organizationFacade.hasRole(orgId, callerId, "ADMIN");
+        boolean isAssignedActionReviewer = organizationFacade.hasRole(orgId, callerId, "REVIEWER")
+            && documentFacade.getReviewerIds(request.getDocId()).contains(callerId);
+        if (!isActionAdmin && !isAssignedActionReviewer) {
+            throw new AppException(HttpStatus.FORBIDDEN,
+                "Only an assigned reviewer or an admin may action this request.");
         }
 
         RequestStatus newStatus = Boolean.TRUE.equals(req.getApprove()) ? RequestStatus.APPROVED : RequestStatus.REJECTED;

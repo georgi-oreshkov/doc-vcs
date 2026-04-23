@@ -51,13 +51,14 @@ public interface DocumentMapper {
         }
     }
 
-    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.SET_TO_NULL)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "orgId", ignore = true)
     @Mapping(target = "authorId", ignore = true)
     @Mapping(target = "status", ignore = true)
     @Mapping(target = "latestVersionId", ignore = true)
     @Mapping(target = "latestApprovedVersionId", ignore = true)
+    @Mapping(target = "reviewerIds", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
