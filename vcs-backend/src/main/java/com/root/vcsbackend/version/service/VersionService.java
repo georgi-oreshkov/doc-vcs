@@ -262,10 +262,9 @@ public class VersionService {
         requireRole(documentFacade.resolveOrgId(docId), callerId, "AUTHOR", "ADMIN");
         int nextNumber = versionRepository.findTopByDocIdOrderByVersionNumberDesc(docId).map(v -> v.getVersionNumber() + 1).orElse(1);
         VersionEntity rollback = versionRepository.save(VersionEntity.builder()
-            .docId(docId).versionNumber(nextNumber).status(VersionStatus.PENDING).isDraft(false)
+            .docId(docId).versionNumber(nextNumber).status(VersionStatus.DRAFT).isDraft(true)
             .checksum(target.getChecksum()).storageType(target.getStorageType()).build());
         documentFacade.updateLatestVersionId(docId, rollback.getId());
-        documentFacade.updateStatusToPendingReview(docId); 
         return rollback;
     }
 

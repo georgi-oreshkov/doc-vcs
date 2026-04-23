@@ -32,7 +32,7 @@ public interface VersionMapper {
     @Mapping(target = "versionNumber", source = "nextVersionNumber")
     @Mapping(target = "isDraft", source = "req.isDraft")
     @Mapping(target = "checksum", source = "req.checksum")
-    @Mapping(target = "status", constant = "PENDING")
+    @Mapping(target = "status", constant = "DRAFT")
     @Mapping(target = "storageType", source = "req.isDiff", qualifiedByName = "isDiffToStorageType")
     @Mapping(target = "diffPreview", source = "req.diffPreview")
     @Mapping(target = "createdAt", ignore = true)

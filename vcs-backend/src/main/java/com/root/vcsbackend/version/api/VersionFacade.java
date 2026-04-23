@@ -45,7 +45,7 @@ public class VersionFacade {
         VersionEntity version = VersionEntity.builder()
             .docId(docId)
             .versionNumber(1)
-            .status(VersionStatus.PENDING)
+            .status(VersionStatus.DRAFT)
             .isDraft(true)
             .build();
         VersionEntity saved = versionRepository.save(version);

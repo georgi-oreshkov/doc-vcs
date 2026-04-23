@@ -107,11 +107,17 @@ public class RequestService {
     public List<ForkRequestEntity> listRequests(UUID callerId, String typeFilter, String statusFilter) {
         List<ForkRequestEntity> all = forkRequestRepository.findAll().stream()
             .filter(r -> {
-                // Return if the user created it, OR if the user is an admin/reviewer in the doc's org
+                // Return if the user created it
                 if (r.getRequesterId().equals(callerId)) return true;
                 try {
                     UUID orgId = documentFacade.resolveOrgId(r.getDocId());
-                    return organizationFacade.hasRole(orgId, callerId, "ADMIN", "REVIEWER");
+                    // Admins see all requests in their org
+                    if (organizationFacade.hasRole(orgId, callerId, "ADMIN")) return true;
+                    // Reviewers only see requests for documents they are assigned to
+                    if (organizationFacade.hasRole(orgId, callerId, "REVIEWER")) {
+                        return documentFacade.getReviewerIds(r.getDocId()).contains(callerId);
+                    }
+                    return false;
                 } catch (Exception e) {
                     return false;
                 }
