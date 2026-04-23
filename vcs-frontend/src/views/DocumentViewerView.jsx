@@ -57,6 +57,12 @@ export default function DocumentViewerView() {
   const selectedVersion = versions[effectiveIndex];
   const prevVersion = effectiveIndex > 0 ? versions[effectiveIndex - 1] : null;
   const isLatest = effectiveIndex === versions.length - 1;
+  useEffect(() => {
+    setSliderIndex(null);
+  }, [versions.length]);
+
+  // ТУК Е ЗАЩИТАТА: Проверява дали има версия, която чака ревю
+  const hasPendingReview = versions.some(v => v.status === 'PENDING');
 
   // Mutation for requesting a review
   const reviewMutation = useMutation({
@@ -267,13 +273,13 @@ export default function DocumentViewerView() {
             </div>
           )}
           
-          {selectedVersion?.status === 'DRAFT' && (
+          {isLatest && selectedVersion?.status === 'DRAFT' && (
             <Button color="secondary" startContent={<Send size={16} />} onPress={() => reviewMutation.mutate()} isLoading={reviewMutation.isPending}>
               Request Review
             </Button>
           )}
 
-          {selectedVersion?.status === 'PENDING' && isReviewer && (
+          {isLatest && selectedVersion?.status === 'PENDING' && isReviewer && (
             <>
               <Button color="success" variant="flat" startContent={<CheckCircle size={16} />} onPress={handleApprove} isLoading={approveVersion.isPending}>
                 Approve
@@ -287,9 +293,25 @@ export default function DocumentViewerView() {
           <Button variant="bordered" className="border-zinc-700 text-zinc-300" startContent={<Download size={18} />} onPress={handleDownload}>Download</Button>
 
           {isLatest ? (
-            <Button color="primary" startContent={<UploadCloud size={18} />} onPress={onNewVersionOpen}>New Version</Button>
+            <Button 
+              color="primary" 
+              startContent={<UploadCloud size={18} />} 
+              onPress={onNewVersionOpen}
+              isDisabled={hasPendingReview} // ТУК Е ЗАЩИТАТА
+            >
+              New Version
+            </Button>
           ) : (
-            <Button color="warning" variant="flat" startContent={<RotateCcw size={18} />} onPress={() => rollback.mutate({ docId, versionId: selectedVersion.id })} isLoading={rollback.isPending}>Rollback</Button>
+            <Button 
+              color="warning" 
+              variant="flat" 
+              startContent={<RotateCcw size={18} />} 
+              onPress={() => rollback.mutate({ docId, versionId: selectedVersion.id })} 
+              isLoading={rollback.isPending}
+              isDisabled={hasPendingReview} // ТУК Е ЗАЩИТАТА
+            >
+              Rollback
+            </Button>
           )}
         </div>
       </div>
