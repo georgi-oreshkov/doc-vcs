@@ -49,7 +49,7 @@ public class DocumentEntity extends BaseEntity {
 
     /** Reviewers assigned at document creation time. Stored in document_reviewers table. */
     @Builder.Default
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "document_reviewers", joinColumns = @JoinColumn(name = "document_id"))
     @Column(name = "reviewer_id", nullable = false)
     private List<UUID> reviewerIds = new ArrayList<>();
