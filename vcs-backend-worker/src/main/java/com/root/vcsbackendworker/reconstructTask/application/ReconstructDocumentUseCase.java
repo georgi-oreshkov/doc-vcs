@@ -66,12 +66,6 @@ public class ReconstructDocumentUseCase {
             }
         }
 
-        // Check if the document is in 'Reviewing' state
-        if (documentService.isDocumentInReviewingState(task.getDocId())) {
-            log.warn("Cannot upload reconstructed document: Document is in 'Reviewing' state. docId={}", task.getDocId());
-            recordFailure(task, FailureReason.DOCUMENT_IN_REVIEW);
-            return;
-        }
 
         // 7. Upload to a temporary S3 key and generate a presigned GET URL
         String tempKey = S3KeyTemplates.tempReconstruction(task.getDocId(), task.getTargetVersionNumber());
