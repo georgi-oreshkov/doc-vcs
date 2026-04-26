@@ -66,6 +66,7 @@ public class ReconstructDocumentUseCase {
             }
         }
 
+
         // 7. Upload to a temporary S3 key and generate a presigned GET URL
         String tempKey = S3KeyTemplates.tempReconstruction(task.getDocId(), task.getTargetVersionNumber());
         try {
