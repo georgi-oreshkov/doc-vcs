@@ -116,7 +116,7 @@ export default function NotificationMenu() {
         </PopoverTrigger>
       </Badge>
 
-      <PopoverContent className="p-0 bg-zinc-950 border border-zinc-800 rounded-xl w-[230px] shadow-2xl flex flex-col overflow-hidden">
+      <PopoverContent className="p-0 bg-zinc-950 border border-zinc-800 rounded-xl w-[90vw] sm:w-[300px] shadow-2xl flex flex-col overflow-hidden">
         
         <div className="flex gap-4 px-4 pt-4 pb-2 border-b border-zinc-800/50 shrink-0">
           {['unread', 'all'].map(tab => (
